@@ -842,60 +842,93 @@ let currentOpeningPackId = "base"; // El tipo de sobre que se está abriendo
 
 function updateShopUI() {
   if (!currentUser) return;
-  document.getElementById("shop-karm-balance").textContent = currentUser.karm;
+
+  const karmEl = document.getElementById("shop-karm-balance");
+  if (karmEl) karmEl.textContent = currentUser.karm;
 
   const packs = currentUser.packs || {};
 
-  // === Renderizar catálogo de sobres disponibles para comprar ===
+  // === Catálogo de sobres para comprar ===
   const catalog = document.getElementById("shop-packs-catalog");
+  if (!catalog) return;
   catalog.innerHTML = "";
+
   PACK_TYPES.forEach(pack => {
     const card = document.createElement("div");
     card.className = "glass-card shop-buy-card";
-    card.innerHTML = `
-      <div class="shop-pack-visual" style="border-color:${pack.color}; box-shadow:0 0 20px ${pack.color}33;">${pack.emoji}</div>
-      <h2>${pack.name}</h2>
-      <p style="font-size:0.85rem; color:var(--text-muted); text-align:center;">${pack.description}</p>
-      <div class="rarity-rates">
-        <span>Común: ${pack.rates.common}%</span> | <span>Rara: ${pack.rates.rare}%</span> |
-        <span>Épica: ${pack.rates.epic}%</span> | <span>Legendaria: ${pack.rates.legendary}%</span>
-      </div>
-      <div class="price-tag" style="color:var(--neon-gold);">${pack.price} Karms</div>
-      <button class="btn btn-primary btn-glow" id="btn-buy-pack-${pack.id}" onclick="buyPack('${pack.id}')">
-        Comprar Sobre
-      </button>
-    `;
+
+    // Crear elementos individualmente para evitar problemas con caracteres especiales
+    const visual = document.createElement("div");
+    visual.className = "shop-pack-visual";
+    visual.textContent = pack.emoji;
+
+    const title = document.createElement("h2");
+    title.textContent = pack.name;
+
+    const desc = document.createElement("p");
+    desc.style.cssText = "font-size:0.85rem; color:var(--text-muted); text-align:center;";
+    desc.textContent = pack.description;
+
+    const rates = document.createElement("div");
+    rates.className = "rarity-rates";
+    rates.innerHTML = `<span>Común: ${pack.rates.common}%</span> | <span>Rara: ${pack.rates.rare}%</span> | <span>Épica: ${pack.rates.epic}%</span> | <span>Legendaria: ${pack.rates.legendary}%</span>`;
+
+    const price = document.createElement("div");
+    price.className = "price-tag";
+    price.textContent = `${pack.price} Karms`;
+
+    const buyBtn = document.createElement("button");
+    buyBtn.className = "btn btn-primary btn-glow";
+    buyBtn.textContent = "Comprar Sobre";
+    buyBtn.onclick = () => buyPack(pack.id);
+
+    card.appendChild(visual);
+    card.appendChild(title);
+    card.appendChild(desc);
+    card.appendChild(rates);
+    card.appendChild(price);
+    card.appendChild(buyBtn);
     catalog.appendChild(card);
   });
 
-  // === Renderizar inventario de sobres del jugador ===
+  // === Inventario del jugador ===
   const inventoryList = document.getElementById("shop-packs-inventory-list");
-  inventoryList.innerHTML = "";
-  PACK_TYPES.forEach(pack => {
-    const qty = packs[pack.id] || 0;
-    const row = document.createElement("div");
-    row.className = "currency-item";
-    row.style.cssText = "justify-content:space-between; display:flex; width:100%; align-items:center;";
-    row.innerHTML = `
-      <span>${pack.emoji} ${pack.name}</span>
-      <strong style="color:${qty > 0 ? 'var(--neon-cyan)' : 'var(--text-muted)'}">${qty}</strong>
-    `;
-    inventoryList.appendChild(row);
-  });
+  if (inventoryList) {
+    inventoryList.innerHTML = "";
+    PACK_TYPES.forEach(pack => {
+      const qty = packs[pack.id] || 0;
+      const row = document.createElement("div");
+      row.style.cssText = "justify-content:space-between; display:flex; width:100%; align-items:center; padding: 6px 0;";
 
-  // === Renderizar botones de apertura ===
+      const label = document.createElement("span");
+      label.textContent = `${pack.emoji} ${pack.name}`;
+
+      const count = document.createElement("strong");
+      count.textContent = qty;
+      count.style.color = qty > 0 ? "#00f2fe" : "var(--text-muted)";
+      count.style.fontSize = "1.1rem";
+
+      row.appendChild(label);
+      row.appendChild(count);
+      inventoryList.appendChild(row);
+    });
+  }
+
+  // === Botones de apertura ===
   const openButtons = document.getElementById("shop-open-buttons");
-  openButtons.innerHTML = "";
-  PACK_TYPES.forEach(pack => {
-    const qty = packs[pack.id] || 0;
-    const btn = document.createElement("button");
-    btn.className = "btn btn-accent btn-glow";
-    btn.textContent = `✨ Abrir ${pack.name}`;
-    btn.disabled = qty <= 0;
-    btn.style.opacity = qty <= 0 ? "0.4" : "1";
-    btn.onclick = () => openPack(pack.id);
-    openButtons.appendChild(btn);
-  });
+  if (openButtons) {
+    openButtons.innerHTML = "";
+    PACK_TYPES.forEach(pack => {
+      const qty = packs[pack.id] || 0;
+      const btn = document.createElement("button");
+      btn.className = "btn btn-accent btn-glow";
+      btn.textContent = `✨ Abrir ${pack.name}`;
+      btn.disabled = qty <= 0;
+      btn.style.opacity = qty <= 0 ? "0.4" : "1";
+      btn.onclick = () => openPack(pack.id);
+      openButtons.appendChild(btn);
+    });
+  }
 }
 
 window.buyPack = function(packId) {
