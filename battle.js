@@ -10,16 +10,21 @@ let battleListenerRef = null;
 let combatProcessed = false;
 let gameEndHandled = false;
 
-// Convierte lo que Firebase devuelve (puede ser objeto sparse) en un array limpio de 5 slots
 function normalizeBoard(board) {
   const result = [null, null, null, null, null];
   if (!board) return result;
   for (let i = 0; i < 5; i++) {
     const val = board[i] || board[String(i)];
-    result[i] = (val && typeof val === 'object' && val.id) ? val : null;
+    // Verificar estrictamente que val sea un objeto válido y contenga un ID de carta
+    if (val && typeof val === 'object' && typeof val.id === 'string') {
+      result[i] = val;
+    } else {
+      result[i] = null;
+    }
   }
   return result;
 }
+
 
 // Convierte el board a un objeto con claves "0"-"4" para que Firebase
 // preserve los slots vacíos (Firebase ignora null en arrays pero respeta objetos)

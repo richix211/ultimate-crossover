@@ -614,26 +614,30 @@ body {
 /* Tooltip de descripción en hover */
 .card-desc-tooltip {
   position: absolute;
-  bottom: 38px;
+  bottom: 42px;
   left: 5%;
   width: 90%;
-  background: rgba(10, 11, 16, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(10, 11, 16, 0.98);
+  border: 1px solid var(--neon-cyan);
   border-radius: 6px;
   padding: 6px;
   font-size: 0.65rem;
   color: #f1f3f9;
   text-align: center;
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
-  transition: opacity 0.2s ease;
-  z-index: 10;
-  line-height: 1.2;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+  z-index: 99;
+  line-height: 1.25;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.75);
 }
 
 .game-card:hover .card-desc-tooltip {
   opacity: 1;
+  visibility: visible;
 }
+
 
 /* Rarezas */
 .rarity-common {
