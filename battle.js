@@ -70,6 +70,10 @@ function initiateBattleRoom(duelData, role) {
       const initialHand1 = [p1Deck.shift(), p1Deck.shift(), p1Deck.shift()].filter(Boolean);
       const initialHand2 = [p2Deck.shift(), p2Deck.shift(), p2Deck.shift()].filter(Boolean);
 
+      // Guardar copias de los mazos completos iniciales (las 10 cartas) para poder re-mezclar su propio mazo
+      const p1OriginalDeck = [...p1Deck, ...initialHand1];
+      const p2OriginalDeck = [...p2Deck, ...initialHand2];
+
       const battle = {
         id: battleId,
         phase: "placement",
@@ -83,6 +87,7 @@ function initiateBattleRoom(duelData, role) {
           hp: 100,
           energy: 1,
           deck: p1Deck,
+          originalDeck: p1OriginalDeck,
           hand: initialHand1,
           board: serializeBoard([null, null, null, null, null]),
           hasDrawn: false,
@@ -93,12 +98,14 @@ function initiateBattleRoom(duelData, role) {
           hp: 100,
           energy: 1,
           deck: p2Deck,
+          originalDeck: p2OriginalDeck,
           hand: initialHand2,
           board: serializeBoard([null, null, null, null, null]),
           hasDrawn: false,
           ready: false
         }
       };
+
 
       db.ref(`battles/${battleId}`).set(battle, () => {
         activeBattle = battle;
@@ -507,21 +514,33 @@ function drawCard(type) {
   }
 
   if (type === "deck") {
-    // Si la baraja se queda sin cartas, la regeneramos automáticamente con cartas aleatorias del pool para evitar bloqueos
+    // Si la baraja se queda sin cartas, la regeneramos a partir de su baraja original (las 10 cartas) para no perder sus propias cartas
     if (!me.deck || me.deck.length === 0) {
-      const allCards = [...DEFAULT_CARDS, ...customCards];
-      // Generar 5 cartas aleatorias oficiales para reponer el mazo
-      const prefix = localRole === "player1" ? "p1" : "p2";
-      const newCards = [];
-      for (let i = 0; i < 5; i++) {
-        const rc = allCards[Math.floor(Math.random() * allCards.length)];
-        newCards.push({ ...rc, instanceId: `${prefix}_replenished_${rc.id}_${Math.random().toString(36).slice(2)}` });
+      const orig = me.originalDeck || [];
+      if (orig.length > 0) {
+        // Clonar y re-mezclar para el mazo activo
+        const prefix = localRole === "player1" ? "p1" : "p2";
+        const reshuffled = orig.map((c, i) => {
+          return { ...c, instanceId: `${prefix}_reshuffled_${c.id}_${i}_${Math.random().toString(36).slice(2)}` };
+        });
+        shuffle(reshuffled);
+        me.deck = reshuffled;
+        alert("🔄 ¡Tu baraja se ha reciclado a partir de tus 10 cartas originales!");
+      } else {
+        // Fallback de seguridad si no hay originalDeck
+        const allCards = [...DEFAULT_CARDS, ...customCards];
+        const prefix = localRole === "player1" ? "p1" : "p2";
+        const newCards = [];
+        for (let i = 0; i < 5; i++) {
+          const rc = allCards[Math.floor(Math.random() * allCards.length)];
+          newCards.push({ ...rc, instanceId: `${prefix}_replenished_${rc.id}_${Math.random().toString(36).slice(2)}` });
+        }
+        me.deck = newCards;
       }
-      me.deck = newCards;
-      alert("🔄 ¡Tu baraja se ha regenerado automáticamente para continuar el duelo!");
     }
     me.hand.push(me.deck.shift());
   } else {
+
     // Validar ronda par para cartas de apoyo
     if (activeBattle.round % 2 !== 0) {
       alert("Las cartas de apoyo solo se pueden robar en rondas pares (cada 2 rondas).");
