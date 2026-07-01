@@ -399,10 +399,19 @@
     <!-- PANTALLA 8: TABLERO DE COMBATE (5 CARRILES) -->
     <section id="screen-battle" class="screen">
       <!-- Encabezado de combate -->
-      <div class="battle-header">
+      <div class="battle-header" style="justify-content: space-between; display: flex; align-items: center; width: 100%;">
         <div class="battle-title-indicator">BATALLA MULTIJUGADOR</div>
-        <button id="btn-concede" class="btn btn-danger btn-sm">Rendirse</button>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <button id="btn-mute-bgm" class="btn btn-secondary btn-sm" style="padding: 6px 10px;">🔊 Música</button>
+          <button id="btn-concede" class="btn btn-danger btn-sm">Rendirse</button>
+        </div>
       </div>
+
+      <!-- Pista BGM de batalla en bucle -->
+      <audio id="battle-bgm" loop preload="auto">
+        <source src="https://assets.mixkit.co/music/preview/mixkit-epic-hero-orchestra-theme-291.mp3" type="audio/mpeg">
+      </audio>
+
 
       <div class="battle-arena">
         <!-- ================= ENEMIGO (ARRIBA) ================= -->

@@ -50,6 +50,17 @@ function initiateBattleRoom(duelData, role) {
   db.ref(`duels`).off();
   showScreen("screen-battle");
 
+  // Reproducir BGM de batalla en bucle
+  const bgm = document.getElementById("battle-bgm");
+  if (bgm) {
+    bgm.currentTime = 0;
+    bgm.volume = 0.35; // Volumen óptimo para no aturdir
+    bgm.play().catch(() => {
+      console.log("Autoplay de música bloqueado por el navegador. El usuario debe interactuar para reproducir.");
+    });
+  }
+
+
   if (role === "player1") {
     db.ref(`users`).once("value", (snap) => {
       if (!snap.exists()) { alert("Error al cargar usuarios."); showScreen("screen-lobby"); return; }
@@ -838,6 +849,19 @@ function setupBattleControls() {
   document.getElementById("btn-draw-support").onclick = () => drawCard("support");
   document.getElementById("btn-end-turn").onclick = endPlacementPhase;
   document.getElementById("btn-concede").onclick = concedeGame;
+
+  // Controlar Mute de la música de fondo
+  const muteBtn = document.getElementById("btn-mute-bgm");
+  const bgm = document.getElementById("battle-bgm");
+  if (muteBtn && bgm) {
+    muteBtn.onclick = () => {
+      bgm.muted = !bgm.muted;
+      muteBtn.textContent = bgm.muted ? "🔇 Silenciado" : "🔊 Música";
+      muteBtn.classList.toggle("btn-secondary");
+      muteBtn.classList.toggle("btn-danger");
+    };
+  }
+
   setupDragAndDrop();
 }
 
@@ -871,6 +895,13 @@ function handleGameEnd() {
   const battleId = activeBattle.id;
   const msg = `🏆 DUELO FINALIZADO\n\nGanador: ${winner}\n\nRegresando al lobby...`;
 
+  // Detener música de batalla
+  const bgm = document.getElementById("battle-bgm");
+  if (bgm) {
+    bgm.pause();
+    bgm.currentTime = 0;
+  }
+
   // Desconectar listener inmediatamente para evitar re-disparos
   if (battleListenerRef) {
     battleListenerRef.off();
@@ -889,6 +920,7 @@ function handleGameEnd() {
     showScreen("screen-lobby");
   }, 1800);
 }
+
 
 // ==========================================================================
 // UTILIDADES
