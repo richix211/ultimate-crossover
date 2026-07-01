@@ -883,6 +883,7 @@ function generateBoosterCards() {
   const users = JSON.parse(localStorage.getItem("uc_users"));
   const dbUser = users.find(u => u.username === currentUser.username);
 
+  // Pool de cartas (Base + Creadas por Admin)
   const pool = [...defaultCardsList, ...customCards];
 
   const commons = pool.filter(c => c.rarity === "common");
@@ -890,39 +891,40 @@ function generateBoosterCards() {
   const epics = pool.filter(c => c.rarity === "epic");
   const legendaries = pool.filter(c => c.rarity === "legendary");
 
+  // Mapeador de seguridad local para evitar ReferenceErrors
+  const localRarityLabels = {
+    common: "Común",
+    rare: "Rara",
+    epic: "Épica",
+    legendary: "Legendaria"
+  };
+
   for (let i = 0; i < 5; i++) {
     const roll = Math.random() * 100;
-    let selectedRarity = "common";
     let subPool = commons;
 
     if (i === 4 && roll < 70) {
       const highRoll = Math.random() * 30;
-      if (highRoll < 20) {
-        selectedRarity = "rare";
+      if (highRoll < 20 && rares.length > 0) {
         subPool = rares;
-      } else if (highRoll < 28) {
-        selectedRarity = "epic";
+      } else if (highRoll < 28 && epics.length > 0) {
         subPool = epics;
-      } else {
-        selectedRarity = "legendary";
+      } else if (legendaries.length > 0) {
         subPool = legendaries;
       }
     } else {
       if (roll < 70) {
-        selectedRarity = "common";
         subPool = commons;
-      } else if (roll < 90) {
-        selectedRarity = "rare";
+      } else if (roll < 90 && rares.length > 0) {
         subPool = rares;
-      } else if (roll < 98) {
-        selectedRarity = "epic";
+      } else if (roll < 98 && epics.length > 0) {
         subPool = epics;
-      } else {
-        selectedRarity = "legendary";
+      } else if (legendaries.length > 0) {
         subPool = legendaries;
       }
     }
 
+    // Elegir carta al azar (con fallback de seguridad)
     const randomCard = subPool[Math.floor(Math.random() * subPool.length)] || commons[0];
     cardsDrawn.push(randomCard);
 
@@ -942,9 +944,12 @@ function generateBoosterCards() {
     cardDiv.className = `game-card rarity-${card.rarity}`;
     cardDiv.style.opacity = "0";
     cardDiv.style.transform = "scale(0.5)";
+    
+    const label = localRarityLabels[card.rarity] || "Común";
+
     cardDiv.innerHTML = `
       <div class="card-cost">${card.cost}</div>
-      <div class="card-rarity-badge">${getRarityStyle(card.rarity).text}</div>
+      <div class="card-rarity-badge">${label}</div>
       <div class="card-name" style="color:#fff;">${card.name}</div>
       <div class="card-illustration">${card.isSupport ? "🛡️" : "⚔️"}</div>
       <div class="card-stats">
@@ -961,6 +966,8 @@ function generateBoosterCards() {
       cardDiv.style.transform = "scale(1)";
     }, index * 400);
   });
+
+
 
   setTimeout(() => {
     finishBtn.classList.remove("hidden");
