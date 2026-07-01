@@ -345,9 +345,54 @@
 
       <div class="glass-card admin-panel">
         <h2>Consola del Administrador (fef8villa)</h2>
-        <p class="subtitle">Gestiona usuarios y distribuye sobres gratuitos de la expansión.</p>
+        <p class="subtitle">Gestiona usuarios y distribuye sobres o cartas específicas de forma masiva.</p>
+
+        <!-- Panel de Distribución Interactivo -->
+        <div class="glass-card" style="background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.05); padding:16px; margin:20px 0; display:flex; flex-direction:column; gap:16px; text-align:left;">
+          <h3 style="font-family:var(--font-title); font-size:1.1rem; color:var(--neon-gold); margin-bottom:-4px;">🎁 Panel de Distribución de Recursos</h3>
+          
+          <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;">
+            <div style="display:flex; flex-direction:column; gap:6px; min-width:200px; flex:1;">
+              <label style="font-size:0.8rem; color:var(--text-muted);">Seleccionar Usuario Destinatario</label>
+              <select id="admin-gift-user-select" style="background:#151821; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px; color:#fff; font-family:var(--font-body); width:100%;"></select>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:6px; min-width:200px; flex:1;">
+              <label style="font-size:0.8rem; color:var(--text-muted);">Tipo de Regalo</label>
+              <select id="admin-gift-type" style="background:#151821; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px; color:#fff; font-family:var(--font-body); width:100%;">
+                <option value="packs">📦 Sobres de Expansión</option>
+                <option value="card">🎴 Carta Específica</option>
+                <option value="karm">🪙 Karms (Moneda)</option>
+              </select>
+            </div>
+
+            <!-- Campos Dinámicos: Sobres -->
+            <div id="admin-gift-pack-select-container" style="display:flex; flex-direction:column; gap:6px; min-width:200px; flex:1;">
+              <label style="font-size:0.8rem; color:var(--text-muted);">Seleccionar Sobre</label>
+              <select id="admin-gift-pack-id" style="background:#151821; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px; color:#fff; font-family:var(--font-body); width:100%;">
+                <!-- Inyectado por JS -->
+              </select>
+            </div>
+
+            <!-- Campos Dinámicos: Cartas -->
+            <div id="admin-gift-card-select-container" class="hidden" style="display:flex; flex-direction:column; gap:6px; min-width:250px; flex:1.5;">
+              <label style="font-size:0.8rem; color:var(--text-muted);">Seleccionar Carta</label>
+              <select id="admin-gift-card-id" style="background:#151821; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px; color:#fff; font-family:var(--font-body); width:100%;">
+                <!-- Inyectado por JS -->
+              </select>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:6px; width:100px;">
+              <label style="font-size:0.8rem; color:var(--text-muted);">Cantidad</label>
+              <input type="number" id="admin-gift-qty" min="1" value="1" style="background:#151821; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:9px; color:#fff; font-family:var(--font-body); width:100%; text-align:center;">
+            </div>
+
+            <button id="btn-admin-submit-gift" class="btn btn-accent btn-glow" style="padding:10px 24px; font-family:var(--font-title);">Enviar Regalo</button>
+          </div>
+        </div>
 
         <div class="admin-users-table-container">
+
           <table class="admin-table">
             <thead>
               <tr>

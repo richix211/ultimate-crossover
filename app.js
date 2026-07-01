@@ -1100,16 +1100,51 @@ function generateBoosterCards(packId) {
 }
 
 // --- CONSOLA DE ADMINISTRADOR (FIREBASE) ---
+let adminPanelInitialized = false;
+
 function renderAdminPanel() {
   const tbody = document.getElementById("admin-users-tbody");
   tbody.innerHTML = "";
 
+  const userSelect = document.getElementById("admin-gift-user-select");
+  const packSelect = document.getElementById("admin-gift-pack-id");
+  const cardSelect = document.getElementById("admin-gift-card-id");
+
+  userSelect.innerHTML = "";
+  packSelect.innerHTML = "";
+  cardSelect.innerHTML = "";
+
+  // Llenar tipo de sobres
+  PACK_TYPES.forEach(pt => {
+    const opt = document.createElement("option");
+    opt.value = pt.id;
+    opt.textContent = `${pt.emoji} ${pt.name}`;
+    packSelect.appendChild(opt);
+  });
+
+  // Llenar cartas del pool completo
+  const allCards = [...DEFAULT_CARDS, ...customCards];
+  allCards.forEach(c => {
+    const opt = document.createElement("option");
+    opt.value = c.id;
+    const label = c.isSupport ? "Apoyo" : "Guerrero";
+    opt.textContent = `[${label}] ${c.name} (Coste: ${c.cost} | ⚔️${c.attack} ❤️${c.health})`;
+    cardSelect.appendChild(opt);
+  });
+
+  // Cargar usuarios y llenar desplegable
   db.ref(`users`).once("value", (snapshot) => {
     if (snapshot.exists()) {
-      let idx = 0;
       snapshot.forEach(child => {
         const u = child.val();
-        // Mostrar todos los tipos de sobres
+        
+        // Agregar al select de usuarios
+        const opt = document.createElement("option");
+        opt.value = u.username;
+        opt.textContent = `${u.username} (${u.friendCode})`;
+        userSelect.appendChild(opt);
+
+        // Renderizar fila de la tabla
         const packsText = PACK_TYPES.map(pt => {
           const qty = u.packs ? (u.packs[pt.id] || 0) : 0;
           return `${pt.emoji} ${qty}`;
@@ -1124,35 +1159,105 @@ function renderAdminPanel() {
           <td>${packsText}</td>
           <td>🎴 ${cardsTotal} Cartas</td>
           <td>
-            ${PACK_TYPES.map(pt => `<button class="btn btn-warning btn-sm" style="margin:2px;" onclick="giftPackToUser('${u.username}','${pt.id}')">🎁 ${pt.emoji}</button>`).join("")}
+            <button class="btn btn-warning btn-sm" onclick="quickGiftPack('${u.username}')">🎁 +1 Sobre</button>
           </td>
         `;
         tbody.appendChild(tr);
-        idx++;
+      });
+    }
+  });
+
+  // Inicializar eventos del panel solo una vez
+  if (!adminPanelInitialized) {
+    adminPanelInitialized = true;
+
+    const giftTypeSelect = document.getElementById("admin-gift-type");
+    const packContainer = document.getElementById("admin-gift-pack-select-container");
+    const cardContainer = document.getElementById("admin-gift-card-select-container");
+
+    giftTypeSelect.onchange = () => {
+      const type = giftTypeSelect.value;
+      if (type === "packs") {
+        packContainer.classList.remove("hidden");
+        cardContainer.classList.add("hidden");
+      } else if (type === "card") {
+        packContainer.classList.add("hidden");
+        cardContainer.classList.remove("hidden");
+      } else {
+        packContainer.classList.add("hidden");
+        cardContainer.classList.add("hidden");
+      }
+    };
+
+    document.getElementById("btn-admin-submit-gift").onclick = () => {
+      const targetUser = userSelect.value;
+      const giftType = giftTypeSelect.value;
+      const qty = parseInt(document.getElementById("admin-gift-qty").value) || 1;
+
+      if (qty < 1) {
+        alert("La cantidad debe ser al menos 1.");
+        return;
+      }
+
+      if (giftType === "packs") {
+        const packId = packSelect.value;
+        giftResources(targetUser, "packs", packId, qty);
+      } else if (giftType === "card") {
+        const cardId = cardSelect.value;
+        giftResources(targetUser, "card", cardId, qty);
+      } else if (giftType === "karm") {
+        giftResources(targetUser, "karm", null, qty);
+      }
+    };
+  }
+}
+
+function giftResources(targetUsername, type, itemId, qty) {
+  const ref = db.ref(`users/${targetUsername}`);
+  ref.once("value", (snapshot) => {
+    if (!snapshot.exists()) {
+      alert("Usuario no encontrado.");
+      return;
+    }
+    const u = snapshot.val();
+
+    if (type === "packs") {
+      if (!u.packs) u.packs = {};
+      // Compatibilidad con formatos antiguos de un solo número
+      if (typeof u.packs === "number") {
+        u.packs = { base: u.packs };
+      }
+      u.packs[itemId] = (u.packs[itemId] || 0) + qty;
+      ref.child("packs").set(u.packs, () => {
+        alert(`🎁 Se han regalado ${qty} sobre(s) a ${targetUsername}.`);
+        renderAdminPanel();
+      });
+    } else if (type === "card") {
+      if (!u.collection) u.collection = [];
+      const idx = u.collection.findIndex(item => item.cardId === itemId);
+      if (idx !== -1) {
+        u.collection[idx].qty += qty;
+      } else {
+        u.collection.push({ cardId: itemId, qty: qty });
+      }
+      ref.child("collection").set(u.collection, () => {
+        alert(`🎴 Se han regalado ${qty} copia(s) de la carta seleccionada a ${targetUsername}.`);
+        renderAdminPanel();
+      });
+    } else if (type === "karm") {
+      u.karm = (u.karm || 0) + qty;
+      ref.child("karm").set(u.karm, () => {
+        alert(`🪙 Se han regalado ${qty} Karms a ${targetUsername}.`);
+        renderAdminPanel();
       });
     }
   });
 }
 
-window.giftPackToUser = function(targetUsername, packId) {
-  const pack = PACK_TYPES.find(p => p.id === packId) || PACK_TYPES[0];
-  db.ref(`users/${targetUsername}/packs`).once("value", (snapshot) => {
-    let currentPacks = {};
-    if (snapshot.exists()) {
-      const snapVal = snapshot.val();
-      // Compatibilidad con formato viejo (número directo)
-      if (typeof snapVal === "number") currentPacks.base = snapVal;
-      else currentPacks = snapVal || {};
-    }
-
-    currentPacks[pack.id] = (currentPacks[pack.id] || 0) + 1;
-
-    db.ref(`users/${targetUsername}/packs`).set(currentPacks, () => {
-      alert(`¡Se ha regalado 1 sobre "${pack.name}" a ${targetUsername}!`);
-      renderAdminPanel();
-    });
-  });
+window.quickGiftPack = function(targetUsername) {
+  giftResources(targetUsername, "packs", "base", 1);
 };
+
 
 // --- SISTEMA DE EMPAREJAMIENTO RÁPIDO (MATCHMAKING) ---
 let matchmakingListener = null;
