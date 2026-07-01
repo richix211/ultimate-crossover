@@ -93,6 +93,10 @@ function reloadCurrentUser() {
   const users = JSON.parse(localStorage.getItem("uc_users")) || [];
   const found = users.find(u => u.username === currentUser.username);
   if (found) {
+    // Normalizar packs si se desconfigura
+    if (!found.packs || typeof found.packs === "number") {
+      found.packs = { base: found.packs || 0 };
+    }
     currentUser = found;
     activeDeckIndex = currentUser.activeDeckIdx || 0;
   }
