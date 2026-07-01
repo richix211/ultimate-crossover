@@ -1,12 +1,12 @@
 // ==========================================================================
-// BATTLE.JS - SISTEMA DE COMBATE ONLINE BLINDADO (SIN ERRORES NI DESINCRONIZACIÓN)
+// BATTLE.JS - SISTEMA DE COMBATE ONLINE BLINDADO CON NIEBLA DE GUERRA
 // ==========================================================================
 
 let activeBattle = null;
 let localRole = null; // "player1" o "player2"
 let dragSelectedCardId = null;
 let battleListenerRef = null;
-let isProcessingCombatLocal = false; // Bandera de seguridad para evitar doble procesamiento por lag de red
+let isProcessingCombatLocal = false;
 
 // --- INICIAR SALA DE BATALLA ONLINE ---
 function initiateBattleRoom(duelData, role) {
@@ -14,13 +14,12 @@ function initiateBattleRoom(duelData, role) {
   const battleId = duelData.id;
   isProcessingCombatLocal = false;
 
-  // Desconectar escuchadores de duelos del lobby para enfocarnos en la batalla
   db.ref(`duels`).off();
 
   if (role === "player1") {
     db.ref(`users`).once("value", (usersSnapshot) => {
       if (!usersSnapshot.exists()) {
-        alert("Error al cargar la base de datos de usuarios.");
+        alert("Error al cargar los usuarios.");
         showScreen("screen-lobby");
         return;
       }
@@ -30,14 +29,13 @@ function initiateBattleRoom(duelData, role) {
       const p2User = usersData[duelData.to];
 
       if (!p1User || !p2User) {
-        alert("Error: Uno de los luchadores no existe.");
+        alert("Error: Jugador no encontrado.");
         showScreen("screen-lobby");
         return;
       }
 
       const allCards = [...DEFAULT_CARDS, ...customCards];
 
-      // Mapear mazos principales (garantizar 10 cartas)
       const p1ActiveDeck = p1User.decks[p1User.activeDeckIdx || 0] || p1User.decks[0];
       const p2ActiveDeck = p2User.decks[p2User.activeDeckIdx || 0] || p2User.decks[0];
 
@@ -50,7 +48,6 @@ function initiateBattleRoom(duelData, role) {
         instanceId: `p2_${id}_${Math.random()}` 
       }));
 
-      // Baraja de apoyo compartida (2 de cada uno = 4 cartas)
       const p1Supp = p1ActiveDeck.support || [];
       const p2Supp = p2ActiveDeck.support || [];
 
@@ -62,7 +59,6 @@ function initiateBattleRoom(duelData, role) {
       shuffle(p1Deck);
       shuffle(p2Deck);
 
-      // Crear objeto de batalla online
       activeBattle = {
         id: battleId,
         player1: {
@@ -92,19 +88,16 @@ function initiateBattleRoom(duelData, role) {
         winner: null
       };
 
-      // Ambos roban 3 cartas iniciales
       for (let i = 0; i < 3; i++) {
         if (activeBattle.player1.deck.length > 0) activeBattle.player1.hand.push(activeBattle.player1.deck.shift());
         if (activeBattle.player2.deck.length > 0) activeBattle.player2.hand.push(activeBattle.player2.deck.shift());
       }
 
-      // Subir estado de batalla inicial a Firebase
       db.ref(`battles/${battleId}`).set(activeBattle, () => {
         setupBattleFirebaseSync(battleId);
       });
     });
   } else {
-    // Player 2 se conecta directamente al listener en Firebase
     setupBattleFirebaseSync(battleId);
   }
 
@@ -117,24 +110,19 @@ function setupBattleFirebaseSync(battleId) {
   battleListenerRef.on("value", (snapshot) => {
     if (snapshot.exists()) {
       const data = snapshot.val();
-      
-      // Defensa: Asegurarse de que el objeto de batalla tenga todas sus propiedades creadas
-      if (!data.player1 || !data.player2 || !data.supportPool) {
-        return; 
-      }
+      if (!data.player1 || !data.player2 || !data.supportPool) return;
 
       activeBattle = data;
       renderBattleScreen();
 
-      // Procesamiento del combate exclusivo para Player 1
+      // Si ambos jugadores marcaron listo, el Player 1 corre los cálculos
       if (localRole === "player1" && activeBattle.player1.ready && activeBattle.player2.ready && !activeBattle.gameEnded && !isProcessingCombatLocal) {
         isProcessingCombatLocal = true;
-        setTimeout(processCombatPhase, 1000);
+        setTimeout(processCombatPhase, 1200);
       }
     }
   });
 
-  // Configurar interacciones locales
   setupDragAndDrop();
 
   document.getElementById("btn-draw-deck").onclick = () => drawCard("deck");
@@ -174,7 +162,6 @@ function drawCard(type) {
     }
   }
 
-  // Bono automático cada 2 rondas
   if (activeBattle.round > 1 && activeBattle.round % 2 === 1 && type === "deck") {
     if (activeBattle.supportPool && activeBattle.supportPool.length > 0) {
       const idx = Math.floor(Math.random() * activeBattle.supportPool.length);
@@ -197,8 +184,9 @@ function playCardToSlot(cardInstanceId, slotIndex) {
   if (cardIdx === -1) return;
   const card = me.hand[cardIdx];
 
+  // VALIDACIÓN ESTRICTA DE COSTO
   if (me.energy < card.cost) {
-    alert("No tienes suficientes monedas.");
+    alert(`No tienes monedas suficientes para colocar esta carta. Costo: ${card.cost} | Monedas: ${me.energy}`);
     return;
   }
 
@@ -255,7 +243,7 @@ function processCombatPhase() {
   const p1 = activeBattle.player1;
   const p2 = activeBattle.player2;
 
-  // ROMPER RECURSIÓN: Desactivar 'ready' de inmediato antes de procesar o guardar
+  // ROMPER RECURSIÓN
   p1.ready = false;
   p2.ready = false;
 
@@ -264,7 +252,7 @@ function processCombatPhase() {
   if (!p1.board) p1.board = [null, null, null, null, null];
   if (!p2.board) p2.board = [null, null, null, null, null];
 
-  // Recorrer y aplicar los ataques de los 5 carriles
+  // Aplicar ataques
   for (let i = 0; i < 5; i++) {
     const cardP1 = p1.board[i];
     const cardP2 = p2.board[i];
@@ -277,13 +265,13 @@ function processCombatPhase() {
     }
   }
 
-  // Limpiar cartas destruidas (Vida <= 0)
+  // Limpiar destruidos
   for (let i = 0; i < 5; i++) {
     if (p1.board[i] && p1.board[i].health <= 0) p1.board[i] = null;
     if (p2.board[i] && p2.board[i].health <= 0) p2.board[i] = null;
   }
 
-  // Verificar ganador
+  // Comprobar ganador
   if (p1.hp <= 0 && p2.hp <= 0) {
     activeBattle.gameEnded = true;
     activeBattle.winner = "Empate";
@@ -297,22 +285,17 @@ function processCombatPhase() {
     activeBattle.winner = p1.username;
     activeBattle.combatLog = `¡Victoria para ${p1.username}!`;
   } else {
-    // Avanzar Ronda
+    // Siguiente Ronda
     activeBattle.round++;
-    
-    // Monedas estrictas basadas en la ronda actual (Ronda 1 = 1, Ronda 2 = 2, Ronda 3 = 3...)
     p1.energy = activeBattle.round;
     p2.energy = activeBattle.round;
-    
     p1.ready = false;
     p2.ready = false;
     p1.hasDrawn = false;
     p2.hasDrawn = false;
-    
     activeBattle.combatLog = `Comienza la ronda ${activeBattle.round}. Monedas restablecidas a ${activeBattle.round}.`;
   }
 
-  // Restablecer la bandera de procesamiento local para habilitar el siguiente turno
   isProcessingCombatLocal = false;
   updateBattleState();
 }
@@ -396,7 +379,7 @@ function renderBattleScreen() {
     endBtn.textContent = "Finalizar Fase de Colocación";
   }
 
-  renderPlayerHand(myData.hand || []);
+  renderPlayerHand(myData.hand || [], myData.energy);
   renderBoard(document.getElementById("player-board"), myData.board || [null, null, null, null, null], true);
   renderBoard(document.getElementById("enemy-board"), oppData.board || [null, null, null, null, null], false);
 
@@ -411,7 +394,7 @@ function renderBattleScreen() {
 }
 
 // --- RENDERIZAR COMPONENTES ---
-function renderPlayerHand(hand) {
+function renderPlayerHand(hand, myEnergy) {
   const container = document.getElementById("player-hand");
   container.innerHTML = "";
 
@@ -421,6 +404,17 @@ function renderPlayerHand(hand) {
     cardDiv.className = `game-card rarity-${card.rarity}`;
     cardDiv.draggable = true;
     cardDiv.dataset.instanceId = card.instanceId;
+
+    // Feedback visual si no tienes monedas suficientes
+    if (myEnergy < card.cost) {
+      cardDiv.style.opacity = "0.4";
+      cardDiv.style.cursor = "not-allowed";
+      cardDiv.classList.add("unplayable");
+    } else {
+      cardDiv.style.opacity = "1";
+      cardDiv.style.cursor = "pointer";
+    }
+
     cardDiv.innerHTML = `
       <div class="card-cost">${card.cost}</div>
       <div class="card-name" style="color:#fff;">${card.name}</div>
@@ -433,12 +427,17 @@ function renderPlayerHand(hand) {
     `;
 
     cardDiv.addEventListener("click", () => {
+      if (myEnergy < card.cost) return; // Bloquear clic
       document.querySelectorAll("#player-hand .game-card").forEach(c => c.classList.remove("selected-for-play"));
       cardDiv.classList.add("selected-for-play");
       dragSelectedCardId = card.instanceId;
     });
 
     cardDiv.addEventListener("dragstart", (e) => {
+      if (myEnergy < card.cost) {
+        e.preventDefault(); // Impedir arrastre si no hay fondos
+        return;
+      }
       e.dataTransfer.setData("text/plain", card.instanceId);
       dragSelectedCardId = card.instanceId;
     });
@@ -449,25 +448,41 @@ function renderPlayerHand(hand) {
 
 function renderBoard(boardContainer, slotsArray, isPlayerBoard) {
   const slotsElements = boardContainer.querySelectorAll(".board-slot");
+  
+  // Niebla de Guerra: Ocultar hasta que ambos terminen su colocación
+  const bothReady = activeBattle.player1.ready && activeBattle.player2.ready;
 
   slotsArray.forEach((card, idx) => {
     const slot = slotsElements[idx];
     slot.innerHTML = "";
 
     if (card) {
-      const cardDiv = document.createElement("div");
-      cardDiv.className = `game-card rarity-${card.rarity}`;
-      cardDiv.innerHTML = `
-        <div class="card-cost">${card.cost}</div>
-        <div class="card-name" style="color:#fff;">${card.name}</div>
-        <div class="card-illustration">${card.isSupport ? "🛡️" : "⚔️"}</div>
-        <div class="card-desc-tooltip">${card.description || "Carta crossover."}</div>
-        <div class="card-stats">
-          <div class="stat">⚔️ ${card.attack}</div>
-          <div class="stat">❤️ ${card.health}</div>
-        </div>
-      `;
-      slot.appendChild(cardDiv);
+      // Si es el tablero enemigo y no han finalizado la fase, se muestra cubierto (Niebla de Guerra)
+      if (!isPlayerBoard && !bothReady) {
+        const coveredCard = document.createElement("div");
+        coveredCard.className = `game-card rarity-common card-back-cyber`;
+        coveredCard.innerHTML = `
+          <div class="card-name" style="color:var(--neon-pink); font-size:0.75rem; margin-top:20px;">❓ OCULTO</div>
+          <div class="card-illustration" style="font-size:1.8rem; margin:15px 0;">🛡️</div>
+          <div style="font-size:0.55rem; color:var(--text-muted);">Carta posicionada</div>
+        `;
+        slot.appendChild(coveredCard);
+      } else {
+        // Revelado normal
+        const cardDiv = document.createElement("div");
+        cardDiv.className = `game-card rarity-${card.rarity}`;
+        cardDiv.innerHTML = `
+          <div class="card-cost">${card.cost}</div>
+          <div class="card-name" style="color:#fff;">${card.name}</div>
+          <div class="card-illustration">${card.isSupport ? "🛡️" : "⚔️"}</div>
+          <div class="card-desc-tooltip">${card.description || "Carta crossover."}</div>
+          <div class="card-stats">
+            <div class="stat">⚔️ ${card.attack}</div>
+            <div class="stat">❤️ ${card.health}</div>
+          </div>
+        `;
+        slot.appendChild(cardDiv);
+      }
     } else {
       slot.textContent = isPlayerBoard ? "COLOCAR" : "VACÍO";
     }

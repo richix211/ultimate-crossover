@@ -382,20 +382,38 @@ function sendDuelInvite(friendName) {
     return;
   }
 
-  // Generar ID de duelo y guardarlo en Firebase
-  const duelId = `duel_${Date.now()}`;
-  const newDuel = {
-    id: duelId,
-    from: currentUser.username,
-    to: friendName,
-    status: "pending",
-    timestamp: Date.now()
-  };
-
-  db.ref(`duels/${duelId}`).set(newDuel, (err) => {
-    if (!err) {
-      alert(`¡Reto enviado a ${friendName}! Esperando que acepte...`);
+  // Comprobar si ya existe un reto pendiente enviado a este jugador
+  db.ref(`duels`).once("value", (snapshot) => {
+    let alreadyExists = false;
+    if (snapshot.exists()) {
+      snapshot.forEach(child => {
+        const d = child.val();
+        if (d.from === currentUser.username && d.to === friendName && d.status === "pending") {
+          alreadyExists = true;
+        }
+      });
     }
+
+    if (alreadyExists) {
+      alert(`Ya le has enviado una invitación de combate a ${friendName}. Espera a que responda.`);
+      return;
+    }
+
+    // Generar ID de duelo y guardarlo en Firebase
+    const duelId = `duel_${Date.now()}`;
+    const newDuel = {
+      id: duelId,
+      from: currentUser.username,
+      to: friendName,
+      status: "pending",
+      timestamp: Date.now()
+    };
+
+    db.ref(`duels/${duelId}`).set(newDuel, (err) => {
+      if (!err) {
+        alert(`¡Reto enviado a ${friendName}! Esperando que acepte...`);
+      }
+    });
   });
 }
 
