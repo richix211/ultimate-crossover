@@ -8,6 +8,7 @@ let localRole = null;
 let dragSelectedCardId = null;
 let battleListenerRef = null;
 let combatProcessed = false; // Evitar doble procesamiento
+let gameEndHandled = false;  // Evitar doble llamada a fin de juego
 
 // ==========================================================================
 // INICIO DE BATALLA
@@ -128,29 +129,31 @@ function waitForBattleAndSubscribe(battleId) {
 function subscribeToFirebaseBattle(battleId) {
   if (battleListenerRef) battleListenerRef.off();
   battleListenerRef = db.ref(`battles/${battleId}`);
+  gameEndHandled = false;
 
   battleListenerRef.on("value", (snap) => {
     if (!snap.exists()) return;
     const data = snap.val();
     if (!data || !data.player1 || !data.player2) return;
 
-    const prevPhase = activeBattle ? activeBattle.phase : null;
     activeBattle = data;
 
     // Renderizar siempre el estado actual
     renderBattle();
 
+    // Fin de juego — solo ejecutar una vez
+    if (data.gameEnded && !gameEndHandled) {
+      gameEndHandled = true;
+      handleGameEnd();
+      return;
+    }
+
     // Solo Player1 procesa el combate para evitar duplicados
-    if (localRole === "player1" && !combatProcessed) {
-      if (data.phase === "placement" && data.player1.ready && data.player2.ready && !data.gameEnded) {
-        // Ambos listos → pasar a fase de revelación
+    if (localRole === "player1" && !combatProcessed && !data.gameEnded) {
+      if (data.phase === "placement" && data.player1.ready && data.player2.ready) {
         combatProcessed = true;
         transitionToRevealPhase();
       }
-    }
-
-    if (data.gameEnded) {
-      handleGameEnd();
     }
   });
 }
@@ -260,8 +263,11 @@ function executeCombatPhase() {
 }
 
 function applyAttack(card, slotIdx, defender, logs, pattern, isP1Attacker) {
+  if (!card || card.attack <= 0) return;
   const dmg = card.attack;
   if (!defender.board) defender.board = [null, null, null, null, null];
+  // Sanitizar board: asegurar que tiene exactamente 5 posiciones
+  while (defender.board.length < 5) defender.board.push(null);
 
   if (pattern === "front") {
     const target = defender.board[slotIdx];
@@ -610,16 +616,27 @@ function setupDragAndDrop() {
 
 function handleGameEnd() {
   if (!activeBattle) return;
-  const msg = `🏆 DUELO FINALIZADO\nGanador: ${activeBattle.winner || "Empate"}`;
+  const winner = activeBattle.winner || "Empate";
+  const battleId = activeBattle.id;
+  const msg = `🏆 DUELO FINALIZADO\n\nGanador: ${winner}\n\nRegresando al lobby...`;
 
-  if (battleListenerRef) battleListenerRef.off();
+  // Desconectar listener inmediatamente para evitar re-disparos
+  if (battleListenerRef) {
+    battleListenerRef.off();
+    battleListenerRef = null;
+  }
 
+  // Mostrar resultado con delay para que la animación de revelación sea visible
   setTimeout(() => {
     alert(msg);
-    db.ref(`battles/${activeBattle.id}`).remove().catch(() => {});
+    if (localRole === "player1") {
+      db.ref(`battles/${battleId}`).remove().catch(() => {});
+    }
     activeBattle = null;
+    combatProcessed = false;
+    gameEndHandled = false;
     showScreen("screen-lobby");
-  }, 1500);
+  }, 1800);
 }
 
 // ==========================================================================

@@ -61,6 +61,7 @@ function showScreen(screenId) {
   document.getElementById(screenId).classList.add("active");
   
   if (screenId === "screen-lobby") {
+    battleEntering = false; // Reset para la próxima batalla
     syncUserData(() => {
       updateLobbyUI();
       listenForDuelInvites(); // Escuchador de duelos entrantes
@@ -418,18 +419,21 @@ function sendDuelInvite(friendName) {
 }
 
 // Escuchador dinámico de invitaciones de duelos
+let battleEntering = false; // Evitar entrada doble a combate
 function listenForDuelInvites() {
   db.ref(`duels`).on("value", (snapshot) => {
     renderPendingDuels();
 
     // Si fui yo quien envió un reto y fue aceptado, entrar a la partida
-    if (snapshot.exists()) {
+    if (!battleEntering && snapshot.exists()) {
       snapshot.forEach(child => {
         const d = child.val();
-        if (d.from === currentUser.username && d.status === "accepted") {
+        if (d.from === currentUser.username && d.status === "accepted" && !battleEntering) {
+          battleEntering = true;
           // Limpiar duelo de invitaciones y entrar a la batalla (como Player 1)
-          db.ref(`duels/${d.id}`).remove();
-          initiateBattleRoom(d, "player1");
+          db.ref(`duels/${d.id}`).remove(() => {
+            initiateBattleRoom(d, "player1");
+          });
         }
       });
     }
