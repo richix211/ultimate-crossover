@@ -157,6 +157,7 @@ function subscribeToFirebaseBattle(battleId) {
   if (battleListenerRef) battleListenerRef.off();
   battleListenerRef = db.ref(`battles/${battleId}`);
   gameEndHandled = false;
+  isAnimatingCombat = false;
 
   battleListenerRef.on("value", (snap) => {
     if (!snap.exists()) return;
@@ -165,8 +166,13 @@ function subscribeToFirebaseBattle(battleId) {
 
     activeBattle = data;
 
-    // Renderizar siempre el estado actual
-    renderBattle();
+    // Si está en fase combat, corremos las animaciones
+    if (data.phase === "combat") {
+      runVisualCombatSequenced();
+    } else {
+      // De lo contrario, renderizar el estado normal (colocación o revelación)
+      renderBattle();
+    }
 
     // Fin de juego — solo ejecutar una vez
     if (data.gameEnded && !gameEndHandled) {
@@ -185,36 +191,178 @@ function subscribeToFirebaseBattle(battleId) {
   });
 }
 
+
 // ==========================================================================
 // TRANSICIONES DE FASE (Solo ejecutadas por Player1)
 // ==========================================================================
 
+let isAnimatingCombat = false; // Bandera local para no re-animar
+
 function transitionToRevealPhase() {
-  // Fase de revelación: mostrar cartas de ambos 1.5s antes de combate
   activeBattle.phase = "revealing";
-  activeBattle.combatLog = "⚔️ ¡Revelando posiciones! El combate comienza...";
+  activeBattle.combatLog = "⚔️ ¡Se revelan las cartas! Preparando ataque...";
   db.ref(`battles/${activeBattle.id}`).update({
     phase: "revealing",
     combatLog: activeBattle.combatLog
   }, () => {
-    // Después de 2 segundos, ejecutar el combate
-    setTimeout(executeCombatPhase, 2000);
+    // 2.5 segundos de revelación, luego pasa a la fase de combate local y animaciones
+    setTimeout(() => {
+      if (localRole === "player1") {
+        db.ref(`battles/${activeBattle.id}`).update({ phase: "combat" });
+      }
+    }, 2500);
   });
 }
 
-function executeCombatPhase() {
+function runVisualCombatSequenced() {
+  if (isAnimatingCombat) return;
+  isAnimatingCombat = true;
+
+  const p1 = JSON.parse(JSON.stringify(activeBattle.player1));
+  const p2 = JSON.parse(JSON.stringify(activeBattle.player2));
+
+  p1.board = normalizeBoard(p1.board);
+  p2.board = normalizeBoard(p2.board);
+
+  const animationsQueue = [];
+
+  // Recorrer los 5 carriles secuencialmente
+  for (let i = 0; i < 5; i++) {
+    const c1 = p1.board[i];
+    const c2 = p2.board[i];
+
+    // Ataque del Jugador 1
+    if (c1 && c1.pattern !== "defense" && c1.attack > 0) {
+      animationsQueue.push({
+        attackerRole: "player1",
+        slotIdx: i,
+        cardName: c1.name,
+        dmg: c1.attack,
+        pattern: c1.pattern
+      });
+    }
+
+    // Ataque del Jugador 2
+    if (c2 && c2.pattern !== "defense" && c2.attack > 0) {
+      animationsQueue.push({
+        attackerRole: "player2",
+        slotIdx: i,
+        cardName: c2.name,
+        dmg: c2.attack,
+        pattern: c2.pattern
+      });
+    }
+  }
+
+  let delay = 0;
+  const logEl = document.getElementById("combat-status-log");
+
+  animationsQueue.forEach((anim, index) => {
+    setTimeout(() => {
+      // Mostrar log actual de la acción
+      const isMeAttacker = (anim.attackerRole === localRole);
+      const logText = isMeAttacker
+        ? `⚔️ Tu [${anim.cardName}] ataca carril ${anim.slotIdx + 1} (Daño: ${anim.dmg})`
+        : `⚠️ [${anim.cardName}] enemigo ataca carril ${anim.slotIdx + 1} (Daño: ${anim.dmg})`;
+      if (logEl) logEl.textContent = logText;
+
+      // Localizar el DOM de la carta atacante
+      const attackerBoardId = (anim.attackerRole === localRole) ? "player-board" : "enemy-board";
+      const attackerBoard = document.getElementById(attackerBoardId);
+      if (attackerBoard) {
+        const slots = attackerBoard.querySelectorAll(".board-slot");
+        const slot = slots[anim.slotIdx];
+        const cardEl = slot ? slot.querySelector(".game-card") : null;
+        if (cardEl) {
+          const bounceClass = (anim.attackerRole === localRole) ? "attack-bounce-up" : "attack-bounce-down";
+          cardEl.classList.add(bounceClass);
+          setTimeout(() => cardEl.classList.remove(bounceClass), 600);
+        }
+      }
+
+      // Aplicar vibración y daño visual al objetivo
+      setTimeout(() => {
+        applyVisualDamage(anim);
+      }, 200);
+
+    }, delay);
+    delay += 1100; // 1.1 segundos entre ataque y ataque
+  });
+
+  // Al finalizar todas las animaciones de ataque
+  setTimeout(() => {
+    isAnimatingCombat = false;
+    if (localRole === "player1") {
+      executeCombatCalculationAndNextRound();
+    }
+  }, delay + 800);
+}
+
+function applyVisualDamage(anim) {
+  const isMeAttacker = (anim.attackerRole === localRole);
+  const targetBoardId = isMeAttacker ? "enemy-board" : "player-board";
+  const targetBoard = document.getElementById(targetBoardId);
+  if (!targetBoard) return;
+
+  const slots = targetBoard.querySelectorAll(".board-slot");
+
+  // Determinar qué slots son golpeados por el patrón
+  let targetSlots = [];
+  if (anim.pattern === "front") {
+    targetSlots = [anim.slotIdx];
+  } else if (anim.pattern === "adjacent") {
+    targetSlots = [anim.slotIdx - 1, anim.slotIdx, anim.slotIdx + 1];
+  } else if (anim.pattern === "right") {
+    targetSlots = [anim.slotIdx + 1 < 5 ? anim.slotIdx + 1 : anim.slotIdx];
+  }
+
+  let hitAnyCard = false;
+  targetSlots.forEach(idx => {
+    if (idx >= 0 && idx < 5) {
+      const slot = slots[idx];
+      const cardEl = slot ? slot.querySelector(".game-card") : null;
+      if (cardEl && !cardEl.classList.contains("board-slot-label")) {
+        hitAnyCard = true;
+        // Sacudir carta objetivo y mostrar daño
+        cardEl.classList.add("damage-shake");
+        setTimeout(() => cardEl.classList.remove("damage-shake"), 400);
+
+        // Crear indicador de daño flotante
+        const dmgIndicator = document.createElement("div");
+        dmgIndicator.className = "damage-indicator";
+        dmgIndicator.textContent = `-${anim.dmg}`;
+        cardEl.appendChild(dmgIndicator);
+        setTimeout(() => dmgIndicator.remove(), 900);
+      }
+    }
+  });
+
+  // Si no golpeó ninguna carta, golpeó directamente al jugador (barra de vida)
+  if (!hitAnyCard) {
+    const healthValueId = isMeAttacker ? "enemy-health-text" : "player-health-text";
+    const healthBarId = isMeAttacker ? "enemy-health-bar" : "player-health-bar";
+    const healthValEl = document.getElementById(healthValueId);
+    const healthBarEl = document.getElementById(healthBarId);
+
+    if (healthValEl && healthBarEl) {
+      // Parpadeo rojo en la barra de vida
+      healthBarEl.style.filter = "brightness(1.5) sepia(1) saturate(5) hue-rotate(-50deg)";
+      setTimeout(() => healthBarEl.style.filter = "", 400);
+    }
+  }
+}
+
+function executeCombatCalculationAndNextRound() {
   if (!activeBattle) return;
   const p1 = JSON.parse(JSON.stringify(activeBattle.player1));
   const p2 = JSON.parse(JSON.stringify(activeBattle.player2));
 
-  // CRÍTICO: normalizar los boards a arrays limpios de 5 elementos
-  // Firebase puede devolver arrays con nulls como objetos sparse {"0": card, "2": card}
   p1.board = normalizeBoard(p1.board);
   p2.board = normalizeBoard(p2.board);
 
   const logs = [];
 
-  // Aplicar ataques de cada carril
+  // Calcular combate definitivo en el servidor
   for (let i = 0; i < 5; i++) {
     const c1 = p1.board[i];
     const c2 = p2.board[i];
@@ -227,14 +375,14 @@ function executeCombatPhase() {
     }
   }
 
-  // Eliminar cartas destruidas (vida <= 0)
+  // Eliminar destruidas
   for (let i = 0; i < 5; i++) {
     if (p1.board[i] && p1.board[i].health <= 0) {
-      logs.push(`💀 ${p1.board[i].name} (J1) fue destruida.`);
+      logs.push(`💥 ${p1.board[i].name} destruida.`);
       p1.board[i] = null;
     }
     if (p2.board[i] && p2.board[i].health <= 0) {
-      logs.push(`💀 ${p2.board[i].name} (J2) fue destruida.`);
+      logs.push(`💥 ${p2.board[i].name} destruida.`);
       p2.board[i] = null;
     }
   }
@@ -242,11 +390,9 @@ function executeCombatPhase() {
   p1.hp = Math.max(0, p1.hp);
   p2.hp = Math.max(0, p2.hp);
 
-  // Convertir board a formato aceptado por Firebase (sin nulls como objeto)
   p1.board = serializeBoard(p1.board);
   p2.board = serializeBoard(p2.board);
 
-  // Verificar ganador
   let gameEnded = false;
   let winner = null;
   let finalLog = logs.join(" | ");
@@ -272,7 +418,6 @@ function executeCombatPhase() {
       winner: winner
     });
   } else {
-    // Avanzar a siguiente ronda
     const nextRound = activeBattle.round + 1;
     p1.energy = nextRound;
     p2.energy = nextRound;
@@ -280,9 +425,6 @@ function executeCombatPhase() {
     p2.ready = false;
     p1.hasDrawn = false;
     p2.hasDrawn = false;
-
-    // Limpiar tablero de cartas restantes (quedan entre rondas)
-    // Las cartas en tablero permanecen entre rondas (diseño estratégico)
 
     db.ref(`battles/${activeBattle.id}`).update({
       phase: "placement",
@@ -293,10 +435,11 @@ function executeCombatPhase() {
       gameEnded: false,
       winner: null
     }, () => {
-      combatProcessed = false; // Permitir siguiente ronda
+      combatProcessed = false;
     });
   }
 }
+
 
 function applyAttack(card, slotIdx, defender, logs, pattern, isP1Attacker) {
   if (!card || card.attack <= 0) return;
