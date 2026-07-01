@@ -445,7 +445,6 @@ function applyAttack(card, slotIdx, defender, logs, pattern) {
   if (!card || card.attack <= 0) return;
   const dmg = card.attack;
   
-  // Sanitizar el tablero enemigo garantizando un array de 5 elementos limpio
   defender.board = normalizeBoard(defender.board);
 
   if (pattern === "front") {
@@ -458,19 +457,27 @@ function applyAttack(card, slotIdx, defender, logs, pattern) {
       logs.push(`💥 ${card.name} → Vida directa (-${dmg})`);
     }
   } else if (pattern === "adjacent") {
-    const targets = [slotIdx - 1, slotIdx, slotIdx + 1];
-    let hit = false;
-    targets.forEach(tIdx => {
-      if (tIdx >= 0 && tIdx < 5 && defender.board[tIdx]) {
-        defender.board[tIdx].health = Math.max(0, defender.board[tIdx].health - dmg);
-        logs.push(`↔️ ${card.name} → ${defender.board[tIdx].name} (-${dmg} ❤️)`);
-        hit = true;
+    // Ataca a los lados (izquierda slotIdx-1 y derecha slotIdx+1)
+    const sides = [slotIdx - 1, slotIdx + 1];
+    
+    sides.forEach(sIdx => {
+      // Si el carril está dentro del tablero
+      if (sIdx >= 0 && sIdx < 5) {
+        const target = defender.board[sIdx];
+        if (target) {
+          target.health = Math.max(0, target.health - dmg);
+          logs.push(`↔️ ${card.name} (Lado) → ${target.name} (-${dmg} ❤️)`);
+        } else {
+          // Si no hay carta en el lado, va directo al rival
+          defender.hp = Math.max(0, defender.hp - dmg);
+          logs.push(`💥 ${card.name} (Lado Vacío) → Vida directa (-${dmg})`);
+        }
+      } else {
+        // Fuera de los límites del tablero (bordes izquierdo/derecho) también hace daño directo
+        defender.hp = Math.max(0, defender.hp - dmg);
+        logs.push(`💥 ${card.name} (Borde) → Vida directa (-${dmg})`);
       }
     });
-    if (!hit) {
-      defender.hp = Math.max(0, defender.hp - dmg);
-      logs.push(`💥 ${card.name} → Vida directa (-${dmg})`);
-    }
   } else if (pattern === "right") {
     const tIdx = slotIdx + 1 < 5 ? slotIdx + 1 : slotIdx;
     const target = defender.board[tIdx];
@@ -483,6 +490,7 @@ function applyAttack(card, slotIdx, defender, logs, pattern) {
     }
   }
 }
+
 
 
 // ==========================================================================
@@ -499,9 +507,18 @@ function drawCard(type) {
   }
 
   if (type === "deck") {
+    // Si la baraja se queda sin cartas, la regeneramos automáticamente con cartas aleatorias del pool para evitar bloqueos
     if (!me.deck || me.deck.length === 0) {
-      alert("Tu baraja está vacía.");
-      return;
+      const allCards = [...DEFAULT_CARDS, ...customCards];
+      // Generar 5 cartas aleatorias oficiales para reponer el mazo
+      const prefix = localRole === "player1" ? "p1" : "p2";
+      const newCards = [];
+      for (let i = 0; i < 5; i++) {
+        const rc = allCards[Math.floor(Math.random() * allCards.length)];
+        newCards.push({ ...rc, instanceId: `${prefix}_replenished_${rc.id}_${Math.random().toString(36).slice(2)}` });
+      }
+      me.deck = newCards;
+      alert("🔄 ¡Tu baraja se ha regenerado automáticamente para continuar el duelo!");
     }
     me.hand.push(me.deck.shift());
   } else {
@@ -523,6 +540,7 @@ function drawCard(type) {
   me.hasDrawn = true;
   pushMyUpdate(me);
 }
+
 
 
 function playCardToSlot(cardInstanceId, slotIndex) {
