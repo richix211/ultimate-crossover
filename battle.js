@@ -1,117 +1,125 @@
 // ==========================================================================
-// BATTLE.JS - LÓGICA DE COMBATE Y SINCRONIZACIÓN MULTIJUGADOR REAL (CROSS-TAB)
+// BATTLE.JS - LÓGICA DE COMBATE ONLINE EN TIEMPO REAL CON FIREBASE
 // ==========================================================================
 
 let activeBattle = null;
 let localRole = null; // "player1" o "player2"
 let dragSelectedCardId = null;
+let battleListenerRef = null;
 
-// --- INICIAR SALA DE BATALLA ---
+// --- INICIAR SALA DE BATALLA ONLINE ---
 function initiateBattleRoom(duelData, role) {
   localRole = role;
-  
-  // Si soy el Player 1 (Creador/Retador), inicializo el estado del combate
+  const battleId = duelData.id;
+
+  // Desconectar escuchadores de duelos del lobby para enfocarnos en la batalla
+  db.ref(`duels`).off();
+
   if (role === "player1") {
-    const users = JSON.parse(localStorage.getItem("uc_users"));
-    const p1User = users.find(u => u.username === duelData.from);
-    const p2User = users.find(u => u.username === duelData.to);
+    // Buscar barajas de ambos jugadores en Firebase
+    db.ref(`users`).once("value", (usersSnapshot) => {
+      const usersData = usersSnapshot.val();
+      const p1User = usersData[duelData.from];
+      const p2User = usersData[duelData.to];
 
-    // Unir todas las cartas personalizadas y base para buscar datos
-    const allCards = [...DEFAULT_CARDS, ...(JSON.parse(localStorage.getItem("uc_custom_cards")) || [])];
+      const allCards = [...DEFAULT_CARDS, ...customCards];
 
-    // Baraja inicial de 10 cartas (permitiendo duplicados)
-    const p1Deck = p1User.deck.map(id => ({ ...allCards.find(c => c.id === id), instanceId: `p1_${id}_${Math.random()}` }));
-    const p2Deck = p2User.deck.map(id => ({ ...allCards.find(c => c.id === id), instanceId: `p2_${id}_${Math.random()}` }));
+      const p1Deck = p1User.decks[p1User.activeDeckIdx || 0].cards.map(id => ({ 
+        ...allCards.find(c => c.id === id), 
+        instanceId: `p1_${id}_${Math.random()}` 
+      }));
+      const p2Deck = p2User.decks[p2User.activeDeckIdx || 0].cards.map(id => ({ 
+        ...allCards.find(c => c.id === id), 
+        instanceId: `p2_${id}_${Math.random()}` 
+      }));
 
-    // Baraja de apoyo compartida (2 de cada uno = 4 cartas)
-    const supportPool = [
-      ...p1User.support.map(id => ({ ...allCards.find(c => c.id === id), instanceId: `supp_p1_${id}_${Math.random()}` })),
-      ...p2User.support.map(id => ({ ...allCards.find(c => c.id === id), instanceId: `supp_p2_${id}_${Math.random()}` }))
-    ];
+      // Baraja de apoyo compartida (2 de cada uno = 4 cartas)
+      const p1Supp = p1User.decks[p1User.activeDeckIdx || 0].support || [];
+      const p2Supp = p2User.decks[p2User.activeDeckIdx || 0].support || [];
 
-    // Mezclar mazos iniciales
-    shuffle(p1Deck);
-    shuffle(p2Deck);
+      const supportPool = [
+        ...p1Supp.map(id => ({ ...allCards.find(c => c.id === id), instanceId: `supp_p1_${id}_${Math.random()}` })),
+        ...p2Supp.map(id => ({ ...allCards.find(c => c.id === id), instanceId: `supp_p2_${id}_${Math.random()}` }))
+      ];
 
-    activeBattle = {
-      id: duelData.id,
-      player1: {
-        username: p1User.username,
-        hp: 100,
-        energy: 1, // Monedas Ronda 1
-        deck: p1Deck,
-        hand: [],
-        board: [null, null, null, null, null], // 5 slots
-        ready: false, // Indica si finalizó colocación en la ronda
-        hasDrawn: false // Indica si ya robó en la ronda
-      },
-      player2: {
-        username: p2User.username,
-        hp: 100,
-        energy: 1,
-        deck: p2Deck,
-        hand: [],
-        board: [null, null, null, null, null],
-        ready: false,
-        hasDrawn: false
-      },
-      supportPool: supportPool,
-      round: 1,
-      combatLog: "¡Comienza el duelo! Ronda 1: Roba una carta.",
-      gameEnded: false,
-      winner: null
-    };
+      shuffle(p1Deck);
+      shuffle(p2Deck);
 
-    // Ambos roban 3 cartas iniciales de su baraja
-    for (let i = 0; i < 3; i++) {
-      if (activeBattle.player1.deck.length > 0) activeBattle.player1.hand.push(activeBattle.player1.deck.shift());
-      if (activeBattle.player2.deck.length > 0) activeBattle.player2.hand.push(activeBattle.player2.deck.shift());
-    }
+      // Crear objeto de batalla online
+      activeBattle = {
+        id: battleId,
+        player1: {
+          username: p1User.username,
+          hp: 100,
+          energy: 1,
+          deck: p1Deck,
+          hand: [],
+          board: [null, null, null, null, null],
+          ready: false,
+          hasDrawn: false
+        },
+        player2: {
+          username: p2User.username,
+          hp: 100,
+          energy: 1,
+          deck: p2Deck,
+          hand: [],
+          board: [null, null, null, null, null],
+          ready: false,
+          hasDrawn: false
+        },
+        supportPool: supportPool,
+        round: 1,
+        combatLog: "¡Comienza el duelo! Ronda 1: Roba una carta.",
+        gameEnded: false,
+        winner: null
+      };
 
-    // Guardar estado inicial en localStorage
-    localStorage.setItem("uc_active_battle", JSON.stringify(activeBattle));
+      // Ambos roban 3 cartas iniciales
+      for (let i = 0; i < 3; i++) {
+        if (activeBattle.player1.deck.length > 0) activeBattle.player1.hand.push(activeBattle.player1.deck.shift());
+        if (activeBattle.player2.deck.length > 0) activeBattle.player2.hand.push(activeBattle.player2.deck.shift());
+      }
+
+      // Subir estado de batalla inicial a Firebase
+      db.ref(`battles/${battleId}`).set(activeBattle, () => {
+        setupBattleFirebaseSync(battleId);
+      });
+    });
   } else {
-    // Player 2 espera un segundo a que se cree el objeto de combate
-    setTimeout(() => {
-      activeBattle = JSON.parse(localStorage.getItem("uc_active_battle"));
-      renderBattleScreen();
-    }, 200);
+    // Player 2 se conecta directamente al listener en Firebase
+    setupBattleFirebaseSync(battleId);
   }
 
   showScreen("screen-battle");
-  setupBattleSync();
-  renderBattleScreen();
 }
 
-// --- SINCRONIZAR EVENTOS DE COMBATE EN TIEMPO REAL ---
-function setupBattleSync() {
-  window.addEventListener("storage", (e) => {
-    if (e.key === "uc_active_battle" && e.newValue) {
-      activeBattle = JSON.parse(e.newValue);
+// --- SINCRONIZACIÓN ONLINE DE LA BATALLA ---
+function setupBattleFirebaseSync(battleId) {
+  // Escuchar todos los cambios de la partida en la nube
+  battleListenerRef = db.ref(`battles/${battleId}`);
+  battleListenerRef.on("value", (snapshot) => {
+    if (snapshot.exists()) {
+      activeBattle = snapshot.val();
       renderBattleScreen();
 
-      // Si ambos jugadores están listos (ready), el Player 1 procesa el combate
+      // Si ambos jugadores están listos, el Player 1 procesa el combate
       if (localRole === "player1" && activeBattle.player1.ready && activeBattle.player2.ready && !activeBattle.gameEnded) {
         setTimeout(processCombatPhase, 1000);
       }
     }
   });
 
-  // Eventos de arrastrar y soltar (Drag and Drop)
+  // Configurar interacciones locales
   setupDragAndDrop();
 
-  // Botones de Robo
   document.getElementById("btn-draw-deck").onclick = () => drawCard("deck");
   document.getElementById("btn-draw-support").onclick = () => drawCard("support");
-
-  // Botón Finalizar Turno/Fase
   document.getElementById("btn-end-turn").onclick = endPlacementPhase;
-
-  // Botón Rendirse
   document.getElementById("btn-concede").onclick = concedeGame;
 }
 
-// --- ACCIONES DE ROBO DE CARTAS ---
+// --- ACCIONES DE COMBATE ---
 function drawCard(type) {
   const me = localRole === "player1" ? activeBattle.player1 : activeBattle.player2;
   
@@ -120,18 +128,20 @@ function drawCard(type) {
     return;
   }
 
+  // Asegurar estructura
+  if (!me.hand) me.hand = [];
+  if (!me.deck) me.deck = [];
+
   if (type === "deck") {
     if (me.deck.length > 0) {
       me.hand.push(me.deck.shift());
     } else {
-      alert("No te quedan cartas en tu baraja inicial.");
+      alert("No te quedan cartas en tu baraja principal.");
       return;
     }
   } else if (type === "support") {
-    if (activeBattle.supportPool.length > 0) {
-      // Robar una aleatoria de las 4 compartidas
+    if (activeBattle.supportPool && activeBattle.supportPool.length > 0) {
       const idx = Math.floor(Math.random() * activeBattle.supportPool.length);
-      // Clonamos para evitar problemas de referencia
       const drawn = { ...activeBattle.supportPool[idx], instanceId: `supp_drawn_${Math.random()}` };
       me.hand.push(drawn);
     } else {
@@ -140,10 +150,9 @@ function drawCard(type) {
     }
   }
 
-  // Bono automático cada 2 rondas (Ronda 3, 5, 7...) se procesa aquí
+  // Bono automático cada 2 rondas
   if (activeBattle.round > 1 && activeBattle.round % 2 === 1 && type === "deck") {
-    // Si robó de deck principal, le regalamos la de apoyo correspondiente al bono automático
-    if (activeBattle.supportPool.length > 0) {
+    if (activeBattle.supportPool && activeBattle.supportPool.length > 0) {
       const idx = Math.floor(Math.random() * activeBattle.supportPool.length);
       const autoDrawn = { ...activeBattle.supportPool[idx], instanceId: `supp_auto_${Math.random()}` };
       me.hand.push(autoDrawn);
@@ -155,28 +164,25 @@ function drawCard(type) {
   updateBattleState();
 }
 
-// --- COLOCACIÓN DE CARTA ---
 function playCardToSlot(cardInstanceId, slotIndex) {
   const me = localRole === "player1" ? activeBattle.player1 : activeBattle.player2;
 
-  // Buscar carta en mano
+  if (!me.hand) return;
   const cardIdx = me.hand.findIndex(c => c.instanceId === cardInstanceId);
   if (cardIdx === -1) return;
   const card = me.hand[cardIdx];
 
-  // Validar Costo de Monedas
   if (me.energy < card.cost) {
-    alert("No tienes suficientes monedas para jugar esta carta.");
+    alert("No tienes suficientes monedas.");
     return;
   }
 
-  // Validar espacio del tablero vacío
+  if (!me.board) me.board = [null, null, null, null, null];
   if (me.board[slotIndex] !== null) {
     alert("Este carril ya está ocupado.");
     return;
   }
 
-  // Descontar coste y posicionar
   me.energy -= card.cost;
   me.hand.splice(cardIdx, 1);
   me.board[slotIndex] = card;
@@ -185,7 +191,6 @@ function playCardToSlot(cardInstanceId, slotIndex) {
   updateBattleState();
 }
 
-// --- FINALIZAR FASE DE COLOCACIÓN ---
 function endPlacementPhase() {
   const me = localRole === "player1" ? activeBattle.player1 : activeBattle.player2;
 
@@ -195,146 +200,112 @@ function endPlacementPhase() {
   }
 
   me.ready = true;
-  activeBattle.combatLog = `¡${me.username} está listo para el combate! Esperando al oponente...`;
+  activeBattle.combatLog = `¡${me.username} está listo! Esperando a que el rival finalice su fase...`;
   
   updateBattleState();
 }
 
-// --- ACTUALIZAR Y GUARDAR ESTADO DE BATALLA ---
-function updateBattleState() {
-  localStorage.setItem("uc_active_battle", JSON.stringify(activeBattle));
-  renderBattleScreen();
-
-  // Si somos Player 1 y ambos listos, procesar el combate directamente
-  if (localRole === "player1" && activeBattle.player1.ready && activeBattle.player2.ready && !activeBattle.gameEnded) {
-    setTimeout(processCombatPhase, 1000);
-  }
-}
-
-// --- RENDICIÓN ---
 function concedeGame() {
   if (confirm("¿Estás seguro de que quieres rendirte?")) {
-    const me = localRole === "player1" ? activeBattle.player1 : activeBattle.player2;
     const opponent = localRole === "player1" ? activeBattle.player2 : activeBattle.player1;
+    const me = localRole === "player1" ? activeBattle.player1 : activeBattle.player2;
 
     activeBattle.gameEnded = true;
     activeBattle.winner = opponent.username;
-    activeBattle.combatLog = `¡${me.username} se ha rendido! Victoria para ${opponent.username}.`;
+    activeBattle.combatLog = `¡${me.username} se rindió! Victoria para ${opponent.username}.`;
     updateBattleState();
   }
 }
 
-// --- PROCESAR FASE DE COMBATE (SOLO EJECUTADO POR PLAYER 1) ---
-function processCombatPhase() {
-  let log = `Ronda ${activeBattle.round} - ¡Fase de Combate! \n`;
+function updateBattleState() {
+  db.ref(`battles/${activeBattle.id}`).set(activeBattle);
+}
 
+// --- PROCESAR FASE DE COMBATE (EJECUTADO POR JUGADOR 1 EN LA NUBE) ---
+function processCombatPhase() {
+  let log = `Ronda ${activeBattle.round} - Combate finalizado. \n`;
   const p1 = activeBattle.player1;
   const p2 = activeBattle.player2;
 
-  // Recorrer los 5 carriles
+  if (!p1.board) p1.board = [null, null, null, null, null];
+  if (!p2.board) p2.board = [null, null, null, null, null];
+
   for (let i = 0; i < 5; i++) {
     const cardP1 = p1.board[i];
     const cardP2 = p2.board[i];
 
-    // --- ACCIÓN JUGADOR 1 EN CAR RIL i ---
     if (cardP1 && cardP1.attack > 0 && cardP1.pattern !== "defense") {
-      executeCardAttack(cardP1, i, p1, p2, 1);
+      executeCardAttack(cardP1, i, p1, p2);
     }
-
-    // --- ACCIÓN JUGADOR 2 EN CAR RIL i ---
     if (cardP2 && cardP2.attack > 0 && cardP2.pattern !== "defense") {
-      executeCardAttack(cardP2, i, p2, p1, 2);
+      executeCardAttack(cardP2, i, p2, p1);
     }
   }
 
-  // Limpiar cartas eliminadas (Vida <= 0)
+  // Limpiar cartas destruidas
   for (let i = 0; i < 5; i++) {
-    if (p1.board[i] && p1.board[i].health <= 0) {
-      log += `[P1] [${p1.board[i].name}] ha sido derrotado. `;
-      p1.board[i] = null;
-    }
-    if (p2.board[i] && p2.board[i].health <= 0) {
-      log += `[P2] [${p2.board[i].name}] ha sido derrotado. `;
-      p2.board[i] = null;
-    }
+    if (p1.board[i] && p1.board[i].health <= 0) p1.board[i] = null;
+    if (p2.board[i] && p2.board[i].health <= 0) p2.board[i] = null;
   }
 
-  // Verificar condiciones de victoria
+  // Verificar ganador
   if (p1.hp <= 0 && p2.hp <= 0) {
     activeBattle.gameEnded = true;
     activeBattle.winner = "Empate";
-    activeBattle.combatLog = "¡Ambos luchadores cayeron al mismo tiempo! ¡Es un Empate!";
+    activeBattle.combatLog = "¡Es un empate! Ambos cayeron en la batalla.";
   } else if (p1.hp <= 0) {
     activeBattle.gameEnded = true;
     activeBattle.winner = p2.username;
-    activeBattle.combatLog = `¡Victoria para ${p2.username}! La salud de ${p1.username} llegó a 0.`;
+    activeBattle.combatLog = `¡Victoria para ${p2.username}!`;
   } else if (p2.hp <= 0) {
     activeBattle.gameEnded = true;
     activeBattle.winner = p1.username;
-    activeBattle.combatLog = `¡Victoria para ${p1.username}! La salud de ${p2.username} llegó a 0.`;
+    activeBattle.combatLog = `¡Victoria para ${p1.username}!`;
   } else {
     // Siguiente Ronda
     activeBattle.round++;
-    
-    // Asignar nuevas monedas no acumulables (Ronda 1 = 1, Ronda 2 = 2, Ronda 3 = 3...)
     p1.energy = activeBattle.round;
     p2.energy = activeBattle.round;
-
-    // Resetear estados para la fase de colocación/robo
     p1.ready = false;
     p2.ready = false;
     p1.hasDrawn = false;
     p2.hasDrawn = false;
-
-    activeBattle.combatLog = `Fin de Combate. Iniciando Ronda ${activeBattle.round}. Monedas actualizadas a ${activeBattle.round}.`;
+    activeBattle.combatLog = `Comienza la ronda ${activeBattle.round}. Monedas restablecidas a ${activeBattle.round}.`;
   }
 
   updateBattleState();
 }
 
-// --- EJECUTAR ATAQUE DE CARTA SEGÚN PATRÓN ---
-function executeCardAttack(card, slotIdx, attacker, defender, playerNum) {
+function executeCardAttack(card, slotIdx, attacker, defender) {
   const dmg = card.attack;
+  if (!defender.board) defender.board = [null, null, null, null, null];
 
   if (card.pattern === "front") {
-    // Ataca directo al frente (mismo slotIdx)
     const target = defender.board[slotIdx];
-    if (target) {
-      target.health -= dmg;
-    } else {
-      defender.hp = Math.max(0, defender.hp - dmg);
-    }
+    if (target) target.health -= dmg;
+    else defender.hp = Math.max(0, defender.hp - dmg);
   } else if (card.pattern === "adjacent") {
-    // Ataca al frente y a los adyacentes del frente (slotIdx - 1, slotIdx, slotIdx + 1)
     const targets = [slotIdx - 1, slotIdx, slotIdx + 1];
-    let damagedOpponent = false;
-
+    let hit = false;
     targets.forEach(tIdx => {
       if (tIdx >= 0 && tIdx < 5) {
         const target = defender.board[tIdx];
         if (target) {
           target.health -= dmg;
-          damagedOpponent = true;
+          hit = true;
         }
       }
     });
-
-    // Si no golpeó a ningún luchador, el daño del carril principal va directo al rival
     if (!defender.board[slotIdx]) {
       defender.hp = Math.max(0, defender.hp - dmg);
     }
   } else if (card.pattern === "right") {
-    // Ataca únicamente al carril de la derecha del oponente frontal (slotIdx + 1)
     const targetIdx = slotIdx + 1;
     if (targetIdx < 5) {
       const target = defender.board[targetIdx];
-      if (target) {
-        target.health -= dmg;
-      } else {
-        defender.hp = Math.max(0, defender.hp - dmg);
-      }
+      if (target) target.health -= dmg;
+      else defender.hp = Math.max(0, defender.hp - dmg);
     } else {
-      // Si no existe carril a la derecha, el ataque falla o va al frente
       const target = defender.board[slotIdx];
       if (target) target.health -= dmg;
       else defender.hp = Math.max(0, defender.hp - dmg);
@@ -342,7 +313,7 @@ function executeCardAttack(card, slotIdx, attacker, defender, playerNum) {
   }
 }
 
-// --- RENDERIZAR TABLERO DE BATALLA ---
+// --- RENDERIZAR TABLERO ---
 function renderBattleScreen() {
   if (!activeBattle) return;
 
@@ -350,25 +321,20 @@ function renderBattleScreen() {
   const myData = isP1 ? activeBattle.player1 : activeBattle.player2;
   const oppData = isP1 ? activeBattle.player2 : activeBattle.player1;
 
-  // Nombres de jugadores
   document.getElementById("player-name-display").textContent = `${myData.username} (Tú)`;
   document.getElementById("enemy-name-display").textContent = oppData.username;
 
-  // Barras de Vida
   document.getElementById("player-health-text").textContent = `${myData.hp}/100`;
   document.getElementById("player-health-bar").style.width = `${myData.hp}%`;
   
   document.getElementById("enemy-health-text").textContent = `${oppData.hp}/100`;
   document.getElementById("enemy-health-bar").style.width = `${oppData.hp}%`;
 
-  // Monedas
   document.getElementById("player-energy-text").textContent = `${myData.energy}/${activeBattle.round}`;
   document.getElementById("enemy-energy-text").textContent = `${oppData.energy}/${activeBattle.round}`;
 
-  // Log de combate
   document.getElementById("combat-status-log").textContent = activeBattle.combatLog;
 
-  // Habilitar/Deshabilitar botones de robo
   const drawControls = document.getElementById("draw-phase-controls");
   if (myData.hasDrawn) {
     drawControls.style.opacity = "0.5";
@@ -380,7 +346,6 @@ function renderBattleScreen() {
     document.getElementById("btn-draw-support").disabled = false;
   }
 
-  // Habilitar botón de listo
   const endBtn = document.getElementById("btn-end-turn");
   if (myData.ready) {
     endBtn.disabled = true;
@@ -390,23 +355,22 @@ function renderBattleScreen() {
     endBtn.textContent = "Finalizar Fase de Colocación";
   }
 
-  // Renderizar mano del jugador
-  renderPlayerHand(myData.hand);
+  renderPlayerHand(myData.hand || []);
+  renderBoard(document.getElementById("player-board"), myData.board || [null, null, null, null, null], true);
+  renderBoard(document.getElementById("enemy-board"), oppData.board || [null, null, null, null, null], false);
 
-  // Renderizar tableros (Fila oponente arriba, fila jugador abajo)
-  renderBoard(document.getElementById("player-board"), myData.board, true);
-  renderBoard(document.getElementById("enemy-board"), oppData.board, false);
-
-  // Validar fin del juego
   if (activeBattle.gameEnded) {
-    alert(`¡FIN DEL JUEGO! Ganador: ${activeBattle.winner}.`);
-    // Limpiar batalla de localStorage y regresar al Lobby
-    localStorage.removeItem("uc_active_battle");
+    alert(`¡DUELO FINALIZADO! Ganador: ${activeBattle.winner}`);
+    // Limpiar ref de Firebase e ir al lobby
+    if (battleListenerRef) {
+      battleListenerRef.off();
+    }
+    db.ref(`battles/${activeBattle.id}`).remove();
     showScreen("screen-lobby");
   }
 }
 
-// --- RENDERIZAR MANO ---
+// --- RENDERIZAR COMPONENTES BÁSICOS ---
 function renderPlayerHand(hand) {
   const container = document.getElementById("player-hand");
   container.innerHTML = "";
@@ -418,7 +382,7 @@ function renderPlayerHand(hand) {
     cardDiv.dataset.instanceId = card.instanceId;
     cardDiv.innerHTML = `
       <div class="card-cost">${card.cost}</div>
-      <div class="card-name">${card.name}</div>
+      <div class="card-name" style="color:#fff;">${card.name}</div>
       <div class="card-illustration">${card.isSupport ? "🛡️" : "⚔️"}</div>
       <div class="card-stats">
         <div class="stat">⚔️ ${card.attack}</div>
@@ -426,14 +390,12 @@ function renderPlayerHand(hand) {
       </div>
     `;
 
-    // Interactividad al hacer clic para jugar (alternativa táctil a drag and drop)
     cardDiv.addEventListener("click", () => {
       document.querySelectorAll("#player-hand .game-card").forEach(c => c.classList.remove("selected-for-play"));
       cardDiv.classList.add("selected-for-play");
       dragSelectedCardId = card.instanceId;
     });
 
-    // Drag start
     cardDiv.addEventListener("dragstart", (e) => {
       e.dataTransfer.setData("text/plain", card.instanceId);
       dragSelectedCardId = card.instanceId;
@@ -443,7 +405,6 @@ function renderPlayerHand(hand) {
   });
 }
 
-// --- RENDERIZAR TABLERO RIVAL Y JUGADOR ---
 function renderBoard(boardContainer, slotsArray, isPlayerBoard) {
   const slotsElements = boardContainer.querySelectorAll(".board-slot");
 
@@ -456,7 +417,7 @@ function renderBoard(boardContainer, slotsArray, isPlayerBoard) {
       cardDiv.className = `game-card rarity-${card.rarity}`;
       cardDiv.innerHTML = `
         <div class="card-cost">${card.cost}</div>
-        <div class="card-name">${card.name}</div>
+        <div class="card-name" style="color:#fff;">${card.name}</div>
         <div class="card-illustration">${card.isSupport ? "🛡️" : "⚔️"}</div>
         <div class="card-stats">
           <div class="stat">⚔️ ${card.attack}</div>
@@ -470,7 +431,6 @@ function renderBoard(boardContainer, slotsArray, isPlayerBoard) {
   });
 }
 
-// --- SOPORTE DRAG & DROP Y SELECCIÓN MÓVIL ---
 function setupDragAndDrop() {
   const slots = document.querySelectorAll("#player-board .board-slot");
 
@@ -495,7 +455,6 @@ function setupDragAndDrop() {
       }
     });
 
-    // Clic en slot como alternativa táctil para colocar la carta seleccionada
     slot.addEventListener("click", () => {
       if (dragSelectedCardId) {
         const slotIndex = parseInt(slot.getAttribute("data-slot"));
@@ -506,7 +465,6 @@ function setupDragAndDrop() {
   });
 }
 
-// --- UTILERÍAS ---
 function shuffle(array) {
   for (let i = array.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));

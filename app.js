@@ -1,113 +1,49 @@
 // ==========================================================================
-// APP.JS - LÓGICA CORE DE ULTIMATE CROSSOVER (VERSIÓN CORREGIDA Y ROBUSTA)
+// APP.JS - INTEGRACIÓN CORE ONLINE CON FIREBASE REALTIME DATABASE
 // ==========================================================================
+
+// --- CONFIGURACIÓN DE FIREBASE ---
+const firebaseConfig = {
+  apiKey: "AIzaSyD-4ZFrmTlkXpoQfWPNTH9VSs1nHCivhmE",
+  authDomain: "ultimate-crossover.firebaseapp.com",
+  projectId: "ultimate-crossover",
+  storageBucket: "ultimate-crossover.appspot.com",
+  messagingSenderId: "292647096515",
+  appId: "1:292647096515:web:7e8f6d67bb6608b9cf1276",
+  measurementId: "G-CBSY5KTRWG",
+  databaseURL: "https://ultimate-crossover-default-rtdb.firebaseio.com/" // Firebase Realtime Database URL
+};
+
+// Inicializar Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
 // --- ESTADO GLOBAL DE LA APP ---
 let currentUser = null;
-let customCards = []; 
+let customCards = []; // Cartas oficiales creadas por el admin en la nube
 let activeDeckIndex = 0; 
-
-// Función de salida global e instantánea llamada desde HTML
-window.logoutUserDirectly = function() {
-  sessionStorage.removeItem("uc_active_user");
-  currentUser = null;
-  showScreen("screen-auth");
-};
+const defaultCardsList = DEFAULT_CARDS; // Cargado de cards_db.js
 
 // --- INICIALIZACIÓN ---
 document.addEventListener("DOMContentLoaded", () => {
-  initLocalStorage();
   setupAuthEvents();
   setupLobbyEvents();
   setupCreatorEvents();
   setupDeckEvents();
   setupShopEvents();
-  setupSocialSync();
   checkSession();
 });
 
-// --- INICIALIZAR LOCAL STORAGE ---
-function initLocalStorage() {
-  const existingUsers = localStorage.getItem("uc_users");
-  
-  if (!existingUsers) {
-    const adminUser = {
-      username: "admin",
-      email: "admin@ultimatecrossover.com",
-      password: "fef8villa",
-      karm: 5000,
-      packs: { base: 5 },
-      collection: [], 
-      decks: [
-        { name: "Baraja Alfa", cards: ["base_soldado","base_soldado","base_espadachin","base_espadachin","base_golem","base_golem","base_arquero","base_arquero","base_dragon","base_avatar"], support: ["base_pocion_vida", "base_escudo_pesado"] }
-      ],
-      activeDeckIdx: 0,
-      friendCode: "ADMIN#0001",
-      friends: [],
-      claimedDays: {}
-    };
-    localStorage.setItem("uc_users", JSON.stringify([adminUser]));
-  } else {
-    const users = JSON.parse(existingUsers);
-    let updated = false;
-
-    const adminExists = users.some(u => u.username === "admin");
-    if (!adminExists) {
-      users.push({
-        username: "admin",
-        email: "admin@ultimatecrossover.com",
-        password: "fef8villa",
-        karm: 5000,
-        packs: { base: 5 },
-        collection: [],
-        decks: [{ name: "Baraja Alfa", cards: ["base_soldado","base_soldado","base_espadachin","base_espadachin","base_golem","base_golem","base_arquero","base_arquero","base_dragon","base_avatar"], support: ["base_pocion_vida", "base_escudo_pesado"] }],
-        activeDeckIdx: 0,
-        friendCode: "ADMIN#0001",
-        friends: [],
-        claimedDays: {}
-      });
-      updated = true;
-    }
-
-    users.forEach(u => {
-      if (!u.packs || typeof u.packs === "number") {
-        u.packs = { base: u.packs || 2 };
-        updated = true;
-      }
-      if (!u.decks || u.decks.length === 0) {
-        u.decks = [{ name: "Baraja Inicial", cards: [], support: [] }];
-        u.activeDeckIdx = 0;
-        updated = true;
-      }
-    });
-
-    if (updated) {
-      localStorage.setItem("uc_users", JSON.stringify(users));
-    }
+// --- SEGURIDAD / LOGOUT GLOBAL DIRECTO DESDE HTML ---
+window.logoutUserDirectly = function() {
+  // Desactivar escuchadores de duelos antes de salir
+  if (currentUser) {
+    db.ref(`duels`).off();
   }
-
-  if (!localStorage.getItem("uc_custom_cards")) {
-    localStorage.setItem("uc_custom_cards", JSON.stringify([]));
-  }
-  if (!localStorage.getItem("uc_duels")) {
-    localStorage.setItem("uc_duels", JSON.stringify([]));
-  }
-}
-
-// --- RECARGAR USUARIO DESDE STORAGE ---
-function reloadCurrentUser() {
-  if (!currentUser) return;
-  const users = JSON.parse(localStorage.getItem("uc_users")) || [];
-  const found = users.find(u => u.username === currentUser.username);
-  if (found) {
-    // Normalizar packs si se desconfigura
-    if (!found.packs || typeof found.packs === "number") {
-      found.packs = { base: found.packs || 0 };
-    }
-    currentUser = found;
-    activeDeckIndex = currentUser.activeDeckIdx || 0;
-  }
-}
+  sessionStorage.removeItem("uc_active_user");
+  currentUser = null;
+  showScreen("screen-auth");
+};
 
 // --- CHEQUEAR SESIÓN ACTIVA ---
 function checkSession() {
@@ -124,20 +60,40 @@ function showScreen(screenId) {
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   document.getElementById(screenId).classList.add("active");
   
-  reloadCurrentUser();
-  
   if (screenId === "screen-lobby") {
-    updateLobbyUI();
+    syncUserData(() => {
+      updateLobbyUI();
+      listenForDuelInvites(); // Escuchador de duelos entrantes
+    });
   } else if (screenId === "screen-deck") {
-    renderDeckBuilder();
+    syncUserData(renderDeckBuilder);
   } else if (screenId === "screen-shop") {
-    updateShopUI();
+    syncUserData(updateShopUI);
   } else if (screenId === "screen-admin") {
     renderAdminPanel();
   }
 }
 
-// --- AUTENTICACIÓN ---
+// --- SINCRONIZAR USUARIO DESDE FIREBASE ---
+function syncUserData(callback) {
+  if (!currentUser) return;
+  db.ref(`users/${currentUser.username}`).once("value", (snapshot) => {
+    if (snapshot.exists()) {
+      currentUser = snapshot.val();
+      
+      // Normalizar campos si faltan
+      if (!currentUser.packs) currentUser.packs = { base: 2 };
+      if (!currentUser.decks) {
+        currentUser.decks = [{ name: "Baraja Inicial", cards: [], support: [] }];
+        currentUser.activeDeckIdx = 0;
+      }
+      activeDeckIndex = currentUser.activeDeckIdx || 0;
+    }
+    if (callback) callback();
+  });
+}
+
+// --- AUTENTICACIÓN ONLINE (FIREBASE) ---
 function setupAuthEvents() {
   const loginForm = document.getElementById("form-login");
   const registerForm = document.getElementById("form-register");
@@ -151,93 +107,107 @@ function setupAuthEvents() {
     document.getElementById("auth-login-view").classList.remove("hidden");
   };
 
+  // Login
   loginForm.addEventListener("submit", (e) => {
     e.preventDefault();
-    const userOrEmail = document.getElementById("login-username").value.trim();
+    const username = document.getElementById("login-username").value.trim().toLowerCase();
     const pass = document.getElementById("login-password").value;
 
-    const users = JSON.parse(localStorage.getItem("uc_users"));
-    const found = users.find(u => (u.username === userOrEmail || u.email === userOrEmail) && u.password === pass);
-
-    if (found) {
-      sessionStorage.setItem("uc_active_user", found.username);
-      loginUser(found.username);
-    } else {
-      alert("Credenciales incorrectas.");
-    }
+    db.ref(`users/${username}`).once("value", (snapshot) => {
+      if (snapshot.exists()) {
+        const userVal = snapshot.val();
+        if (userVal.password === pass) {
+          sessionStorage.setItem("uc_active_user", userVal.username);
+          loginUser(userVal.username);
+        } else {
+          alert("Contraseña incorrecta.");
+        }
+      } else {
+        alert("Usuario no registrado.");
+      }
+    });
   });
 
+  // Registro
   registerForm.addEventListener("submit", (e) => {
     e.preventDefault();
-    const username = document.getElementById("register-username").value.trim();
+    const username = document.getElementById("register-username").value.trim().toLowerCase();
     const email = document.getElementById("register-email").value.trim();
     const password = document.getElementById("register-password").value;
 
-    if (username.toLowerCase() === "admin") {
-      alert("Nombre de usuario reservado.");
+    if (username.length < 3 || username.includes(" ")) {
+      alert("Nombre de usuario inválido (mínimo 3 caracteres, sin espacios).");
       return;
     }
 
-    const users = JSON.parse(localStorage.getItem("uc_users"));
-    if (users.find(u => u.username.toLowerCase() === username.toLowerCase() || u.email.toLowerCase() === email.toLowerCase())) {
-      alert("El usuario o correo ya está registrado.");
-      return;
-    }
+    db.ref(`users/${username}`).once("value", (snapshot) => {
+      if (snapshot.exists()) {
+        alert("El nombre de usuario ya está registrado.");
+        return;
+      }
 
-    const randomCode = Math.floor(1000 + Math.random() * 9000);
-    const newUser = {
-      username: username,
-      email: email,
-      password: password,
-      karm: 1000, 
-      packs: { base: 2 }, 
-      collection: [], 
-      decks: [
-        { name: "Baraja Inicial", cards: [], support: [] }
-      ],
-      activeDeckIdx: 0,
-      friendCode: `${username.toUpperCase()}#${randomCode}`,
-      friends: [],
-      claimedDays: {}
-    };
+      const randomCode = Math.floor(1000 + Math.random() * 9000);
+      const newUser = {
+        username: username,
+        email: email,
+        password: password,
+        karm: 1000, 
+        packs: { base: 2 }, 
+        collection: [], // Inicialmente vacía
+        decks: [
+          { name: "Baraja Inicial", cards: [], support: [] }
+        ],
+        activeDeckIdx: 0,
+        friendCode: `${username.toUpperCase()}#${randomCode}`,
+        friends: [],
+        claimedDays: {}
+      };
 
-    users.push(newUser);
-    localStorage.setItem("uc_users", JSON.stringify(users));
-    
-    alert("¡Cuenta registrada con éxito!");
-    registerForm.reset();
-    document.getElementById("go-to-login").click();
+      // Guardar en la nube
+      db.ref(`users/${username}`).set(newUser, (err) => {
+        if (err) {
+          alert("Error al registrarse en Firebase.");
+        } else {
+          alert("¡Cuenta registrada con éxito!");
+          registerForm.reset();
+          document.getElementById("go-to-login").click();
+        }
+      });
+    });
   });
 }
 
 function loginUser(username) {
-  const users = JSON.parse(localStorage.getItem("uc_users"));
-  currentUser = users.find(u => u.username === username);
+  db.ref(`users/${username}`).once("value", (snapshot) => {
+    if (snapshot.exists()) {
+      currentUser = snapshot.val();
 
-  if (!currentUser.packs || typeof currentUser.packs === "number") {
-    currentUser.packs = { base: currentUser.packs || 2 };
-  }
-  if (!currentUser.decks || currentUser.decks.length === 0) {
-    currentUser.decks = [{ name: "Baraja Principal", cards: [], support: [] }];
-    currentUser.activeDeckIdx = 0;
-  }
-  
-  // Ocultar Creador para usuarios normales
-  const creatorBtn = document.getElementById("menu-btn-creator");
-  const adminConsoleBtn = document.getElementById("btn-admin-console");
+      // Configuración de vista Admin
+      const creatorBtn = document.getElementById("menu-btn-creator");
+      const adminConsoleBtn = document.getElementById("btn-admin-console");
 
-  if (currentUser.username === "admin") {
-    adminConsoleBtn.classList.remove("hidden");
-    creatorBtn.classList.remove("hidden");
-  } else {
-    adminConsoleBtn.classList.add("hidden");
-    creatorBtn.classList.add("hidden"); 
-  }
+      if (currentUser.username === "admin") {
+        adminConsoleBtn.classList.remove("hidden");
+        creatorBtn.classList.remove("hidden");
+      } else {
+        adminConsoleBtn.classList.add("hidden");
+        creatorBtn.classList.add("hidden"); 
+      }
 
-  customCards = JSON.parse(localStorage.getItem("uc_custom_cards")) || [];
-  activeDeckIndex = currentUser.activeDeckIdx || 0;
+      // Sincronizar base de cartas custom oficiales desde Firebase
+      db.ref(`custom_cards`).on("value", (snap) => {
+        customCards = [];
+        if (snap.exists()) {
+          snap.forEach(child => {
+            customCards.push(child.val());
+          });
+        }
+      });
 
-  showScreen("screen-lobby");
+      activeDeckIndex = currentUser.activeDeckIdx || 0;
+      showScreen("screen-lobby");
+    }
+  });
 }
 
 // --- LOBBY EVENTOS ---
@@ -257,57 +227,59 @@ function setupLobbyEvents() {
 
   document.getElementById("btn-claim-daily").onclick = claimDailyKarm;
 
-  // Agregar Amigo
+  // Agregar Amigo Online
   document.getElementById("form-add-friend").addEventListener("submit", (e) => {
     e.preventDefault();
     const friendInput = document.getElementById("add-friend-input").value.trim();
     if (!friendInput) return;
 
-    if (friendInput === currentUser.username || friendInput === currentUser.friendCode) {
+    if (friendInput.toLowerCase() === currentUser.username || friendInput.toUpperCase() === currentUser.friendCode) {
       alert("No puedes agregarte a ti mismo.");
       return;
     }
 
-    const users = JSON.parse(localStorage.getItem("uc_users"));
-    const targetUser = users.find(u => u.username === friendInput || u.friendCode === friendInput);
+    // Buscar en Firebase
+    db.ref(`users`).once("value", (snapshot) => {
+      let targetUser = null;
+      snapshot.forEach(child => {
+        const u = child.val();
+        if (u.username === friendInput.toLowerCase() || u.friendCode === friendInput.toUpperCase()) {
+          targetUser = u;
+        }
+      });
 
-    if (!targetUser) {
-      alert("Usuario o Código no encontrado.");
-      return;
-    }
+      if (!targetUser) {
+        alert("Usuario o Código de amigo no encontrado en la base de datos.");
+        return;
+      }
 
-    const myDbUser = users.find(u => u.username === currentUser.username);
+      // Añadir amigo de forma mutua
+      if (!currentUser.friends) currentUser.friends = [];
+      if (currentUser.friends.includes(targetUser.username)) {
+        alert("Ya tienes agregado a este amigo.");
+        return;
+      }
 
-    if (myDbUser.friends.includes(targetUser.username)) {
-      alert("Ya es tu amigo.");
-      return;
-    }
+      currentUser.friends.push(targetUser.username);
+      if (!targetUser.friends) targetUser.friends = [];
+      if (!targetUser.friends.includes(currentUser.username)) {
+        targetUser.friends.push(currentUser.username);
+      }
 
-    myDbUser.friends.push(targetUser.username);
-    if (!targetUser.friends.includes(myDbUser.username)) {
-      targetUser.friends.push(myDbUser.username);
-    }
+      // Guardar en la nube
+      db.ref(`users/${currentUser.username}/friends`).set(currentUser.friends);
+      db.ref(`users/${targetUser.username}/friends`).set(targetUser.friends);
 
-    localStorage.setItem("uc_users", JSON.stringify(users));
-    reloadCurrentUser();
-    alert(`¡Has añadido a ${targetUser.username}!`);
-    document.getElementById("add-friend-input").value = "";
-    updateLobbyUI();
+      alert(`¡Has agregado a ${targetUser.username} como amigo!`);
+      document.getElementById("add-friend-input").value = "";
+      updateLobbyUI();
+    });
   });
-
-  // Salir / Logout
-  document.getElementById("btn-logout").onclick = () => {
-    sessionStorage.removeItem("uc_active_user");
-    currentUser = null;
-    showScreen("screen-auth");
-  };
 }
 
 // --- ACTUALIZAR LOBBY ---
 function updateLobbyUI() {
-  reloadCurrentUser();
   if (!currentUser) return;
-
   document.getElementById("lobby-display-name").textContent = currentUser.username;
   document.getElementById("lobby-display-code").textContent = `CÓDIGO: ${currentUser.friendCode}`;
   document.getElementById("lobby-karm-balance").textContent = currentUser.karm;
@@ -358,8 +330,6 @@ function updateDailyRewardGrid() {
 
 function claimDailyKarm() {
   const todayStr = getTodayDateString();
-  reloadCurrentUser();
-  
   if (currentUser.claimedDays && currentUser.claimedDays[todayStr]) {
     alert("Ya has reclamado tu recompensa de hoy.");
     return;
@@ -369,22 +339,18 @@ function claimDailyKarm() {
   const rewards = { 1: 100, 2: 150, 3: 200, 4: 250, 5: 300, 6: 400, 7: 500 };
   const amount = rewards[dayIndex] || 100;
 
-  const users = JSON.parse(localStorage.getItem("uc_users"));
-  const dbUser = users.find(u => u.username === currentUser.username);
+  currentUser.karm = (currentUser.karm || 0) + amount;
+  if (!currentUser.claimedDays) currentUser.claimedDays = {};
+  currentUser.claimedDays[todayStr] = true;
 
-  dbUser.karm = (dbUser.karm || 0) + amount;
-  if (!dbUser.claimedDays) dbUser.claimedDays = {};
-  dbUser.claimedDays[todayStr] = true;
+  db.ref(`users/${currentUser.username}/karm`).set(currentUser.karm);
+  db.ref(`users/${currentUser.username}/claimedDays`).set(currentUser.claimedDays);
 
-  localStorage.setItem("uc_users", JSON.stringify(users));
-  
-  reloadCurrentUser();
   updateLobbyUI();
-  
-  alert(`¡Felicidades! Has reclamado tu recompensa diaria de +${amount} Karms.`);
+  alert(`¡Has reclamado ${amount} Karms!`);
 }
 
-// --- AMIGOS ---
+// --- AMIGOS ONLINE ---
 function renderFriendsList() {
   const container = document.getElementById("friends-list");
   container.innerHTML = "";
@@ -411,52 +377,77 @@ function renderFriendsList() {
 function sendDuelInvite(friendName) {
   const currentDeck = currentUser.decks[activeDeckIndex];
   if (!currentDeck || !currentDeck.cards || currentDeck.cards.length !== 10 || currentDeck.support.length !== 2) {
-    alert("Primero debes ir a 'Álbum y Barajas' y armar una baraja completa (10 cartas de batalla y 2 de apoyo) para combatir.");
+    alert("Primero debes armar y guardar una baraja completa de 10 cartas y 2 de apoyo.");
     showScreen("screen-deck");
     return;
   }
 
-  const duels = JSON.parse(localStorage.getItem("uc_duels")) || [];
-  const cleanDuels = duels.filter(d => d.from !== currentUser.username);
-  
+  // Generar ID de duelo y guardarlo en Firebase
+  const duelId = `duel_${Date.now()}`;
   const newDuel = {
-    id: `duel_${Date.now()}`,
+    id: duelId,
     from: currentUser.username,
     to: friendName,
     status: "pending",
     timestamp: Date.now()
   };
-  
-  cleanDuels.push(newDuel);
-  localStorage.setItem("uc_duels", JSON.stringify(cleanDuels));
-  alert(`¡Desafío enviado a ${friendName}! Esperando respuesta.`);
+
+  db.ref(`duels/${duelId}`).set(newDuel, (err) => {
+    if (!err) {
+      alert(`¡Reto enviado a ${friendName}! Esperando que acepte...`);
+    }
+  });
+}
+
+// Escuchador dinámico de invitaciones de duelos
+function listenForDuelInvites() {
+  db.ref(`duels`).on("value", (snapshot) => {
+    renderPendingDuels();
+
+    // Si fui yo quien envió un reto y fue aceptado, entrar a la partida
+    if (snapshot.exists()) {
+      snapshot.forEach(child => {
+        const d = child.val();
+        if (d.from === currentUser.username && d.status === "accepted") {
+          // Limpiar duelo de invitaciones y entrar a la batalla (como Player 1)
+          db.ref(`duels/${d.id}`).remove();
+          initiateBattleRoom(d, "player1");
+        }
+      });
+    }
+  });
 }
 
 function renderPendingDuels() {
-  const duels = JSON.parse(localStorage.getItem("uc_duels")) || [];
-  const container = document.getElementById("pending-duels-container");
-  container.innerHTML = "";
+  db.ref(`duels`).once("value", (snapshot) => {
+    const container = document.getElementById("pending-duels-container");
+    container.innerHTML = "";
+    let count = 0;
 
-  const myInvites = duels.filter(d => d.to === currentUser.username && d.status === "pending");
+    if (snapshot.exists()) {
+      snapshot.forEach(child => {
+        const d = child.val();
+        if (d.to === currentUser.username && d.status === "pending") {
+          count++;
+          const item = document.createElement("div");
+          item.className = "duel-invite-card";
+          item.innerHTML = `
+            <div class="duel-invite-info" style="color:#fff;">
+              Duelo de: <strong style="color: var(--neon-pink);">${d.from}</strong>
+            </div>
+            <div style="display: flex; gap: 5px;">
+              <button class="btn btn-success btn-sm" onclick="acceptDuel('${d.id}')">Aceptar</button>
+              <button class="btn btn-danger btn-sm" onclick="declineDuel('${d.id}')">X</button>
+            </div>
+          `;
+          container.appendChild(item);
+        }
+      });
+    }
 
-  if (myInvites.length === 0) {
-    container.innerHTML = `<p class="empty-text">Sin invitaciones de combate activas.</p>`;
-    return;
-  }
-
-  myInvites.forEach(d => {
-    const item = document.createElement("div");
-    item.className = "duel-invite-card";
-    item.innerHTML = `
-      <div class="duel-invite-info" style="color:#fff;">
-        Duelo de: <strong style="color: var(--neon-pink);">${d.from}</strong>
-      </div>
-      <div style="display: flex; gap: 5px;">
-        <button class="btn btn-success btn-sm" onclick="acceptDuel('${d.id}')">Aceptar</button>
-        <button class="btn btn-danger btn-sm" onclick="declineDuel('${d.id}')">X</button>
-      </div>
-    `;
-    container.appendChild(item);
+    if (count === 0) {
+      container.innerHTML = `<p class="empty-text">Sin invitaciones de combate activas.</p>`;
+    }
   });
 }
 
@@ -468,42 +459,30 @@ function acceptDuel(duelId) {
     return;
   }
 
-  const duels = JSON.parse(localStorage.getItem("uc_duels"));
-  const found = duels.find(d => d.id === duelId);
-  if (found) {
-    found.status = "accepted";
-    localStorage.setItem("uc_duels", JSON.stringify(duels));
-    initiateBattleRoom(found, "player2");
-  }
+  db.ref(`duels/${duelId}`).once("value", (snapshot) => {
+    if (snapshot.exists()) {
+      const d = snapshot.val();
+      d.status = "accepted";
+      
+      // Actualizar estado en la base de datos
+      db.ref(`duels/${duelId}`).set(d, () => {
+        initiateBattleRoom(d, "player2");
+      });
+    }
+  });
 }
 
 function declineDuel(duelId) {
-  const duels = JSON.parse(localStorage.getItem("uc_duels"));
-  const filtered = duels.filter(d => d.id !== duelId);
-  localStorage.setItem("uc_duels", JSON.stringify(filtered));
-  updateLobbyUI();
+  db.ref(`duels/${duelId}`).remove(() => {
+    renderPendingDuels();
+  });
 }
 
+// Sincronización entre clientes a través de Firebase
 function setupSocialSync() {
-  window.addEventListener("storage", (e) => {
-    if (e.key === "uc_duels" || e.key === "uc_users" || e.key === "uc_custom_cards") {
-      reloadCurrentUser();
-      customCards = JSON.parse(localStorage.getItem("uc_custom_cards")) || [];
-      
-      const activeScreen = document.querySelector(".screen.active");
-      if (activeScreen) {
-        showScreen(activeScreen.id);
-      }
-
-      if (e.key === "uc_duels") {
-        const duels = JSON.parse(e.newValue) || [];
-        const mySentAccepted = duels.find(d => d.from === currentUser.username && d.status === "accepted");
-        if (mySentAccepted) {
-          const clean = duels.filter(d => d.id !== mySentAccepted.id);
-          localStorage.setItem("uc_duels", JSON.stringify(clean));
-          initiateBattleRoom(mySentAccepted, "player1");
-        }
-      }
+  db.ref(`users`).on("value", () => {
+    if (currentUser) {
+      syncUserData(updateLobbyUI);
     }
   });
 }
@@ -554,8 +533,9 @@ function setupCreatorEvents() {
       return;
     }
 
+    const cardId = `custom_${Date.now()}`;
     const newCard = {
-      id: `custom_${Date.now()}`,
+      id: cardId,
       name: nameInput.value.trim(),
       cost: parseInt(costInput.value),
       attack: parseInt(attackInput.value),
@@ -567,22 +547,19 @@ function setupCreatorEvents() {
       isSupport: false
     };
 
-    const allCustom = JSON.parse(localStorage.getItem("uc_custom_cards")) || [];
-    allCustom.push(newCard);
-    localStorage.setItem("uc_custom_cards", JSON.stringify(allCustom));
-    customCards = allCustom;
+    // Subir a Firebase global
+    db.ref(`custom_cards/${cardId}`).set(newCard, (err) => {
+      if (!err) {
+        // Otorgar copia al admin
+        if (!currentUser.collection) currentUser.collection = [];
+        currentUser.collection.push({ cardId: cardId, qty: 1 });
+        db.ref(`users/admin/collection`).set(currentUser.collection);
 
-    const users = JSON.parse(localStorage.getItem("uc_users"));
-    const adminDb = users.find(u => u.username === "admin");
-    
-    adminDb.collection.push({ cardId: newCard.id, qty: 1 });
-    localStorage.setItem("uc_users", JSON.stringify(users));
-
-    reloadCurrentUser();
-
-    alert("¡Carta oficial creada! Ahora está disponible en la base de datos y saldrá en los sobres de todos los jugadores.");
-    form.reset();
-    updateLivePreview();
+        alert("¡Carta oficial creada en la nube con éxito!");
+        form.reset();
+        updateLivePreview();
+      }
+    });
   });
 }
 
@@ -595,48 +572,38 @@ function setupDeckEvents() {
 
   selectDropdown.addEventListener("change", () => {
     activeDeckIndex = parseInt(selectDropdown.value);
-    
-    const users = JSON.parse(localStorage.getItem("uc_users"));
-    users.find(u => u.username === currentUser.username).activeDeckIdx = activeDeckIndex;
-    localStorage.setItem("uc_users", JSON.stringify(users));
-
-    reloadCurrentUser();
+    currentUser.activeDeckIdx = activeDeckIndex;
+    db.ref(`users/${currentUser.username}/activeDeckIdx`).set(activeDeckIndex);
     renderDeckBuilder();
   });
 
   createDeckBtn.onclick = () => {
-    const users = JSON.parse(localStorage.getItem("uc_users"));
-    const dbUser = users.find(u => u.username === currentUser.username);
-    
-    const newIndex = dbUser.decks.length;
-    dbUser.decks.push({
+    const newIndex = currentUser.decks.length;
+    currentUser.decks.push({
       name: `Nueva Baraja ${newIndex + 1}`,
       cards: [],
       support: []
     });
-    dbUser.activeDeckIdx = newIndex;
+    currentUser.activeDeckIdx = newIndex;
     activeDeckIndex = newIndex;
 
-    localStorage.setItem("uc_users", JSON.stringify(users));
-    reloadCurrentUser();
+    db.ref(`users/${currentUser.username}/decks`).set(currentUser.decks);
+    db.ref(`users/${currentUser.username}/activeDeckIdx`).set(activeDeckIndex);
     renderDeckBuilder();
   };
 
   deleteDeckBtn.onclick = () => {
     if (currentUser.decks.length <= 1) {
-      alert("Debes tener al menos una baraja creada.");
+      alert("Debes tener al menos una baraja.");
       return;
     }
-    if (confirm(`¿Estás seguro de borrar la baraja "${currentUser.decks[activeDeckIndex].name}"?`)) {
-      const users = JSON.parse(localStorage.getItem("uc_users"));
-      const dbUser = users.find(u => u.username === currentUser.username);
-      
-      dbUser.decks.splice(activeDeckIndex, 1);
-      dbUser.activeDeckIdx = 0;
+    if (confirm(`¿Borrar la baraja "${currentUser.decks[activeDeckIndex].name}"?`)) {
+      currentUser.decks.splice(activeDeckIndex, 1);
+      currentUser.activeDeckIdx = 0;
       activeDeckIndex = 0;
 
-      localStorage.setItem("uc_users", JSON.stringify(users));
-      reloadCurrentUser();
+      db.ref(`users/${currentUser.username}/decks`).set(currentUser.decks);
+      db.ref(`users/${currentUser.username}/activeDeckIdx`).set(0);
       renderDeckBuilder();
     }
   };
@@ -645,34 +612,28 @@ function setupDeckEvents() {
     const newName = renameInput.value.trim();
     if (!newName) return;
 
-    const users = JSON.parse(localStorage.getItem("uc_users"));
-    const dbUser = users.find(u => u.username === currentUser.username);
-    dbUser.decks[activeDeckIndex].name = newName;
-
-    localStorage.setItem("uc_users", JSON.stringify(users));
-    reloadCurrentUser();
+    currentUser.decks[activeDeckIndex].name = newName;
+    db.ref(`users/${currentUser.username}/decks`).set(currentUser.decks);
     populateDeckDropdown();
   });
 
   document.getElementById("btn-save-deck").onclick = () => {
     const currentDeck = currentUser.decks[activeDeckIndex];
     if (currentDeck.cards.length !== 10) {
-      alert("La baraja de batalla debe tener exactamente 10 cartas.");
+      alert("La baraja principal debe tener exactamente 10 cartas.");
       return;
     }
     if (currentDeck.support.length !== 2) {
-      alert("Debes seleccionar exactamente 2 cartas de apoyo.");
+      alert("La baraja de apoyo debe tener exactamente 2 cartas.");
       return;
     }
 
-    const users = JSON.parse(localStorage.getItem("uc_users"));
-    users.find(u => u.username === currentUser.username).decks = currentUser.decks;
-    localStorage.setItem("uc_users", JSON.stringify(users));
-    
-    reloadCurrentUser();
-
-    alert(`¡Baraja "${currentDeck.name}" guardada con éxito!`);
-    showScreen("screen-lobby");
+    db.ref(`users/${currentUser.username}/decks`).set(currentUser.decks, (err) => {
+      if (!err) {
+        alert(`¡Baraja "${currentDeck.name}" guardada con éxito!`);
+        showScreen("screen-lobby");
+      }
+    });
   };
 }
 
@@ -736,8 +697,8 @@ function renderDeckBuilder() {
 
     cardDiv.onclick = () => {
       const activeDeck = currentUser.decks[activeDeckIndex];
-      const countInDeck = activeDeck.cards.filter(id => id === card.id).length;
-      const countInSupport = activeDeck.support.filter(id => id === card.id).length;
+      const countInDeck = activeDeck.cards ? activeDeck.cards.filter(id => id === card.id).length : 0;
+      const countInSupport = activeDeck.support ? activeDeck.support.filter(id => id === card.id).length : 0;
       const totalUsed = countInDeck + countInSupport;
 
       if (totalUsed >= qty) {
@@ -746,12 +707,14 @@ function renderDeckBuilder() {
       }
 
       if (card.isSupport) {
+        if (!activeDeck.support) activeDeck.support = [];
         if (activeDeck.support.length >= 2) {
           alert("Ya tienes 2 cartas de apoyo.");
           return;
         }
         activeDeck.support.push(card.id);
       } else {
+        if (!activeDeck.cards) activeDeck.cards = [];
         if (activeDeck.cards.length >= 10) {
           alert("Ya tienes 10 cartas principales.");
           return;
@@ -775,6 +738,9 @@ function updateDeckBuilderLists() {
   supportListDiv.innerHTML = "";
 
   const activeDeck = currentUser.decks[activeDeckIndex];
+  if (!activeDeck.cards) activeDeck.cards = [];
+  if (!activeDeck.support) activeDeck.support = [];
+
   document.getElementById("deck-size-val").textContent = activeDeck.cards.length;
   document.getElementById("support-size-val").textContent = activeDeck.support.length;
 
@@ -819,45 +785,40 @@ function setupShopEvents() {
   const finishBtn = document.getElementById("btn-finish-opening");
 
   buyBtn.onclick = () => {
-    reloadCurrentUser();
-    if (currentUser.karm < 500) {
-      alert("No tienes suficientes Karms (necesitas 500).");
-      return;
-    }
+    syncUserData(() => {
+      if (currentUser.karm < 500) {
+        alert("No tienes suficientes Karms (necesitas 500).");
+        return;
+      }
 
-    const users = JSON.parse(localStorage.getItem("uc_users"));
-    const dbUser = users.find(u => u.username === currentUser.username);
+      currentUser.karm -= 500;
+      if (!currentUser.packs) currentUser.packs = { base: 0 };
+      currentUser.packs.base = (currentUser.packs.base || 0) + 1;
 
-    dbUser.karm -= 500;
-    if (!dbUser.packs) dbUser.packs = { base: 0 };
-    dbUser.packs.base = (dbUser.packs.base || 0) + 1;
-
-    localStorage.setItem("uc_users", JSON.stringify(users));
-    
-    reloadCurrentUser();
-    updateShopUI();
-    alert("¡Sobre Base comprado!");
+      db.ref(`users/${currentUser.username}/karm`).set(currentUser.karm);
+      db.ref(`users/${currentUser.username}/packs/base`).set(currentUser.packs.base, () => {
+        updateShopUI();
+        alert("¡Sobre Base comprado!");
+      });
+    });
   };
 
   openBtn.onclick = () => {
-    reloadCurrentUser();
-    const basePacks = currentUser.packs ? (currentUser.packs.base || 0) : 0;
-    if (basePacks <= 0) return;
-    
-    const users = JSON.parse(localStorage.getItem("uc_users"));
-    const dbUser = users.find(u => u.username === currentUser.username);
-
-    dbUser.packs.base--;
-    localStorage.setItem("uc_users", JSON.stringify(users));
-    
-    reloadCurrentUser();
-    updateShopUI();
-
-    overlay.classList.remove("hidden");
-    packModel.classList.remove("ripping");
-    packModel.classList.remove("hidden");
-    revealedGrid.classList.add("hidden");
-    finishBtn.classList.add("hidden");
+    syncUserData(() => {
+      const basePacks = currentUser.packs ? (currentUser.packs.base || 0) : 0;
+      if (basePacks <= 0) return;
+      
+      currentUser.packs.base--;
+      db.ref(`users/${currentUser.username}/packs/base`).set(currentUser.packs.base, () => {
+        updateShopUI();
+        
+        overlay.classList.remove("hidden");
+        packModel.classList.remove("ripping");
+        packModel.classList.remove("hidden");
+        revealedGrid.classList.add("hidden");
+        finishBtn.classList.add("hidden");
+      });
+    });
   };
 
   packModel.onclick = () => {
@@ -875,29 +836,19 @@ function setupShopEvents() {
 }
 
 function updateShopUI() {
-  reloadCurrentUser();
   if (!currentUser) return;
-
   document.getElementById("shop-karm-balance").textContent = currentUser.karm;
   
-  let basePacks = 0;
-  if (currentUser.packs) {
-    if (typeof currentUser.packs === "number") {
-      basePacks = currentUser.packs;
-    } else {
-      basePacks = currentUser.packs.base || 0;
-    }
-  }
-  
+  const basePacks = currentUser.packs ? (currentUser.packs.base || 0) : 0;
   document.getElementById("shop-pack-count-base").textContent = basePacks;
   
   const openBtn = document.getElementById("btn-trigger-open-pack");
   if (basePacks > 0) {
-    openBtn.disabled = false;
     openBtn.removeAttribute("disabled");
+    openBtn.disabled = false;
   } else {
-    openBtn.disabled = true;
     openBtn.setAttribute("disabled", "true");
+    openBtn.disabled = true;
   }
 }
 
@@ -908,28 +859,13 @@ function generateBoosterCards() {
   revealedGrid.classList.remove("hidden");
 
   const cardsDrawn = [];
-  const users = JSON.parse(localStorage.getItem("uc_users")) || [];
-  
-  // Búsqueda robusta insensible a mayúsculas/minúsculas
-  let dbUser = users.find(u => u.username.toLowerCase() === currentUser.username.toLowerCase());
-  
-  // Fallback si no lo encuentra por alguna desincronización
-  if (!dbUser) {
-    dbUser = users[0]; // Admin por defecto si falla
-  }
-
-  // Asegurar que tenga array de colección
-  if (!dbUser.collection) dbUser.collection = [];
-
   const pool = [...defaultCardsList, ...customCards];
-
 
   const commons = pool.filter(c => c.rarity === "common");
   const rares = pool.filter(c => c.rarity === "rare");
   const epics = pool.filter(c => c.rarity === "epic");
   const legendaries = pool.filter(c => c.rarity === "legendary");
 
-  // Mapeador de seguridad local para evitar ReferenceErrors
   const localRarityLabels = {
     common: "Común",
     rare: "Rara",
@@ -962,20 +898,20 @@ function generateBoosterCards() {
       }
     }
 
-    // Elegir carta al azar (con fallback de seguridad)
     const randomCard = subPool[Math.floor(Math.random() * subPool.length)] || commons[0];
     cardsDrawn.push(randomCard);
 
-    const existing = dbUser.collection.find(item => item.cardId === randomCard.id);
+    if (!currentUser.collection) currentUser.collection = [];
+    const existing = currentUser.collection.find(item => item.cardId === randomCard.id);
     if (existing) {
       existing.qty++;
     } else {
-      dbUser.collection.push({ cardId: randomCard.id, qty: 1 });
+      currentUser.collection.push({ cardId: randomCard.id, qty: 1 });
     }
   }
 
-  localStorage.setItem("uc_users", JSON.stringify(users));
-  reloadCurrentUser();
+  // Guardar colección actualizada en Firebase
+  db.ref(`users/${currentUser.username}/collection`).set(currentUser.collection);
 
   cardsDrawn.forEach((card, index) => {
     const cardDiv = document.createElement("div");
@@ -1005,51 +941,56 @@ function generateBoosterCards() {
     }, index * 400);
   });
 
-
-
   setTimeout(() => {
     finishBtn.classList.remove("hidden");
   }, 5 * 400);
 }
 
-// --- CONSOLA DE ADMINISTRADOR ---
+// --- CONSOLA DE ADMINISTRADOR (FIREBASE) ---
 function renderAdminPanel() {
   const tbody = document.getElementById("admin-users-tbody");
   tbody.innerHTML = "";
 
-  const users = JSON.parse(localStorage.getItem("uc_users"));
-  
-  users.forEach((u, index) => {
-    const basePacks = u.packs ? (u.packs.base || 0) : 0;
-    const cardsTotal = u.collection.reduce((acc, curr) => acc + curr.qty, 0) + 12;
+  db.ref(`users`).once("value", (snapshot) => {
+    if (snapshot.exists()) {
+      let idx = 0;
+      snapshot.forEach(child => {
+        const u = child.val();
+        const basePacks = u.packs ? (u.packs.base || 0) : 0;
+        const cardsTotal = u.collection ? u.collection.reduce((acc, curr) => acc + curr.qty, 0) + 12 : 12;
 
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td><strong>${u.username}</strong><br><small>${u.email}</small></td>
-      <td>${u.friendCode}</td>
-      <td>🪙 ${u.karm}</td>
-      <td>📦 ${basePacks} Sobres Base</td>
-      <td>🎴 ${cardsTotal} Cartas</td>
-      <td>
-        <button class="btn btn-warning btn-sm" onclick="giftPackToUser(${index})">🎁 Regalar Sobre Base</button>
-      </td>
-    `;
-    tbody.appendChild(tr);
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><strong>${u.username}</strong><br><small>${u.email}</small></td>
+          <td>${u.friendCode}</td>
+          <td>🪙 ${u.karm}</td>
+          <td>📦 ${basePacks} Sobres</td>
+          <td>🎴 ${cardsTotal} Cartas</td>
+          <td>
+            <button class="btn btn-warning btn-sm" onclick="giftPackToUser('${u.username}')">🎁 Regalar Sobre</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+        idx++;
+      });
+    }
   });
 }
 
-window.giftPackToUser = function(index) {
-  const users = JSON.parse(localStorage.getItem("uc_users"));
-  
-  if (!users[index].packs) users[index].packs = { base: 0 };
-  users[index].packs.base = (users[index].packs.base || 0) + 1;
-  
-  localStorage.setItem("uc_users", JSON.stringify(users));
-  
-  if (users[index].username === currentUser.username) {
-    currentUser = users[index];
-  }
-  
-  alert(`Se ha enviado 1 sobre de regalo a ${users[index].username}.`);
-  renderAdminPanel();
+window.giftPackToUser = function(targetUsername) {
+  db.ref(`users/${targetUsername}/packs`).once("value", (snapshot) => {
+    let currentPacks = { base: 0 };
+    if (snapshot.exists()) {
+      const snapVal = snapshot.val();
+      if (typeof snapVal === "number") currentPacks.base = snapVal;
+      else currentPacks = snapVal;
+    }
+    
+    currentPacks.base = (currentPacks.base || 0) + 1;
+    
+    db.ref(`users/${targetUsername}/packs`).set(currentPacks, () => {
+      alert(`¡Se ha regalado 1 sobre a ${targetUsername}!`);
+      renderAdminPanel();
+    });
+  });
 };
