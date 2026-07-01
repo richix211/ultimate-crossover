@@ -287,6 +287,13 @@ function setupLobbyEvents() {
     document.getElementById("add-friend-input").value = "";
     updateLobbyUI();
   });
+
+  // Salir / Logout
+  document.getElementById("btn-logout").onclick = () => {
+    sessionStorage.removeItem("uc_active_user");
+    currentUser = null;
+    showScreen("screen-auth");
+  };
 }
 
 // --- ACTUALIZAR LOBBY ---
