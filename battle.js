@@ -318,8 +318,9 @@ function applyVisualDamage(anim) {
   if (anim.pattern === "front") {
     targetSlots = [anim.slotIdx];
   } else if (anim.pattern === "adjacent") {
-    targetSlots = [anim.slotIdx - 1, anim.slotIdx, anim.slotIdx + 1];
+    targetSlots = [anim.slotIdx - 1, anim.slotIdx + 1];
   } else if (anim.pattern === "right") {
+
     targetSlots = [anim.slotIdx + 1 < 5 ? anim.slotIdx + 1 : anim.slotIdx];
   }
 
