@@ -1484,4 +1484,22 @@ body {
   100% { opacity: 0; transform: translate(-50%, -80px) scale(0.8); }
 }
 
+/* Animación del Matchmaking */
+.scanner-circle {
+  width: 90px;
+  height: 90px;
+  border: 4px solid rgba(0, 242, 254, 0.1);
+  border-top-color: var(--neon-cyan);
+  border-bottom-color: var(--neon-pink);
+  border-radius: 50%;
+  animation: spinScanner 1.8s linear infinite;
+  box-shadow: 0 0 15px rgba(0, 242, 254, 0.4);
+  margin: 15px 0;
+}
+
+@keyframes spinScanner {
+  to { transform: rotate(360deg); }
+}
+
+
 

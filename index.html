@@ -385,12 +385,11 @@
             <button id="btn-mode-friendly" class="btn btn-accent btn-glow">Ir a Amigos para Retar</button>
           </div>
 
-          <!-- Clasificatoria (Ranked) -->
-          <div class="mode-card disabled-card flex-card">
-            <span class="lock-icon">🔒</span>
-            <h2>🏆 Arena Clasificatoria</h2>
-            <p>Lucha por subir de rango en la tabla clasificatoria global contra jugadores aleatorios.</p>
-            <button class="btn btn-secondary" disabled>PRÓXIMAMENTE</button>
+          <!-- Emparejamiento Rápido (Multijugador Online Aleatorio) -->
+          <div class="mode-card flex-card">
+            <h2>🔮 Emparejamiento Rápido</h2>
+            <p>Busca un oponente en línea de forma aleatoria y entra en combate inmediatamente.</p>
+            <button id="btn-mode-matchmaking" class="btn btn-primary btn-glow">Buscar Oponente</button>
           </div>
         </div>
       </div>
@@ -524,6 +523,21 @@
       <button id="btn-finish-opening" class="btn btn-accent hidden">✨ Recoger Cartas</button>
     </div>
   </div>
+
+  <!-- OVERLAY DE BUSCANDO PARTIDA (MATCHMAKING) -->
+  <div id="matchmaking-overlay" class="overlay hidden">
+    <div class="opening-animation-container" style="gap:20px;">
+      <div style="font-size:4rem; animation: pulseText 1.5s infinite;">🔍</div>
+      <h2 style="font-family:var(--font-title); color:#fff; text-shadow:0 0 10px var(--neon-cyan);">Buscando Oponente</h2>
+      <p style="color:var(--text-muted); font-size:0.9rem;">Esperando a que otro duelista se conecte...</p>
+      
+      <!-- Animación de escáner circular futurista -->
+      <div class="scanner-circle"></div>
+      
+      <button id="btn-cancel-matchmaking" class="btn btn-danger">Cancelar Búsqueda</button>
+    </div>
+  </div>
+
 
   <!-- Cargar los Scripts JS al final -->
   <script src="cards_db.js"></script>

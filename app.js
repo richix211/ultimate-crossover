@@ -276,7 +276,17 @@ function setupLobbyEvents() {
       updateLobbyUI();
     });
   });
+
+  // Configuración de Modos de Juego
+  document.getElementById("btn-mode-friendly").onclick = () => {
+    showScreen("screen-lobby");
+    alert("Selecciona un amigo en línea de tu lista para enviarle una invitación.");
+  };
+
+  document.getElementById("btn-mode-matchmaking").onclick = startMatchmaking;
+  document.getElementById("btn-cancel-matchmaking").onclick = cancelMatchmaking;
 }
+
 
 // --- ACTUALIZAR LOBBY ---
 function updateLobbyUI() {
@@ -1143,3 +1153,126 @@ window.giftPackToUser = function(targetUsername, packId) {
     });
   });
 };
+
+// --- SISTEMA DE EMPAREJAMIENTO RÁPIDO (MATCHMAKING) ---
+let matchmakingListener = null;
+
+function startMatchmaking() {
+  const currentDeck = currentUser.decks[activeDeckIndex];
+  if (!currentDeck || !currentDeck.cards || currentDeck.cards.length !== 10 || currentDeck.support.length !== 2) {
+    alert("Primero debes armar y guardar una baraja completa de 10 cartas y 2 de apoyo.");
+    showScreen("screen-deck");
+    return;
+  }
+
+  const overlay = document.getElementById("matchmaking-overlay");
+  overlay.classList.remove("hidden");
+
+  // Transacción atómica en Firebase para cola de emparejamiento
+  const queueRef = db.ref("matchmaking_queue");
+  queueRef.transaction((currentQueue) => {
+    // Si no hay cola, la creamos
+    if (!currentQueue) {
+      currentQueue = {};
+    }
+    
+    // Buscar si hay alguien más esperando
+    let waitingPlayerKey = null;
+    Object.keys(currentQueue).forEach(key => {
+      if (currentQueue[key].username !== currentUser.username && currentQueue[key].status === "waiting") {
+        waitingPlayerKey = key;
+      }
+    });
+
+    if (waitingPlayerKey) {
+      // Emparejar: sacar al otro jugador de la cola y poner estado matched
+      const opp = currentQueue[waitingPlayerKey];
+      const battleId = `battle_rand_${Date.now()}`;
+      
+      opp.status = "matched";
+      opp.battleId = battleId;
+      opp.opponent = currentUser.username;
+      
+      // Crear registro temporal local de este emparejamiento
+      currentQueue[currentUser.username] = {
+        username: currentUser.username,
+        status: "matched",
+        battleId: battleId,
+        opponent: opp.username,
+        role: "player2" // El emparejador será Player 2
+      };
+      
+      // Actualizar el ticket del oponente
+      currentQueue[waitingPlayerKey] = opp;
+    } else {
+      // No hay nadie, nos ponemos en espera
+      currentQueue[currentUser.username] = {
+        username: currentUser.username,
+        status: "waiting",
+        timestamp: Date.now(),
+        role: "player1" // El que espera iniciará la sala al ser retado
+      };
+    }
+    return currentQueue;
+  }, (error, committed, snapshot) => {
+    if (error) {
+      alert("Error al entrar a la cola de emparejamiento.");
+      overlay.classList.add("hidden");
+      return;
+    }
+    
+    // Escuchar cambios en mi ticket de cola
+    listenToMyQueueTicket();
+  });
+}
+
+function listenToMyQueueTicket() {
+  const myQueueRef = db.ref(`matchmaking_queue/${currentUser.username}`);
+  if (matchmakingListener) matchmakingListener.off();
+
+  matchmakingListener = myQueueRef;
+  myQueueRef.on("value", (snap) => {
+    if (!snap.exists()) return;
+    const ticket = snap.val();
+
+    if (ticket.status === "matched") {
+      // Remover listener de la cola y entrar al juego
+      myQueueRef.off();
+      document.getElementById("matchmaking-overlay").classList.add("hidden");
+
+      // El Player 1 inicia la sala en Firebase, el Player 2 espera y se suscribe
+      const duelSim = {
+        id: ticket.battleId,
+        from: ticket.role === "player1" ? currentUser.username : ticket.opponent,
+        to: ticket.role === "player1" ? ticket.opponent : currentUser.username,
+        status: "accepted"
+      };
+
+      // Limpiar mi ticket de la cola
+      db.ref(`matchmaking_queue/${currentUser.username}`).remove();
+
+      battleEntering = true;
+      if (ticket.role === "player1") {
+        // Inicializar sala de batalla
+        initiateBattleRoom(duelSim, "player1");
+      } else {
+        // Conectarse a sala de batalla existente
+        initiateBattleRoom(duelSim, "player2");
+      }
+    }
+  });
+}
+
+function cancelMatchmaking() {
+  const overlay = document.getElementById("matchmaking-overlay");
+  overlay.classList.add("hidden");
+  
+  if (matchmakingListener) {
+    matchmakingListener.off();
+  }
+  
+  db.ref(`matchmaking_queue/${currentUser.username}`).remove(() => {
+    alert("Búsqueda de oponente cancelada.");
+  });
+}
+
