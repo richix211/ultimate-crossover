@@ -908,11 +908,21 @@ function generateBoosterCards() {
   revealedGrid.classList.remove("hidden");
 
   const cardsDrawn = [];
-  const users = JSON.parse(localStorage.getItem("uc_users"));
-  const dbUser = users.find(u => u.username === currentUser.username);
+  const users = JSON.parse(localStorage.getItem("uc_users")) || [];
+  
+  // Búsqueda robusta insensible a mayúsculas/minúsculas
+  let dbUser = users.find(u => u.username.toLowerCase() === currentUser.username.toLowerCase());
+  
+  // Fallback si no lo encuentra por alguna desincronización
+  if (!dbUser) {
+    dbUser = users[0]; // Admin por defecto si falla
+  }
 
-  // Pool de cartas (Base + Creadas por Admin)
+  // Asegurar que tenga array de colección
+  if (!dbUser.collection) dbUser.collection = [];
+
   const pool = [...defaultCardsList, ...customCards];
+
 
   const commons = pool.filter(c => c.rarity === "common");
   const rares = pool.filter(c => c.rarity === "rare");
