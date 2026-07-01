@@ -514,6 +514,9 @@ function drawCard(type) {
     return;
   }
 
+  // Asegurar que la mano existe (Firebase borra arrays vacíos)
+  if (!me.hand) me.hand = [];
+
   if (type === "deck") {
     // Si la baraja se queda sin cartas, la regeneramos a partir de su baraja original (las 10 cartas) para no perder sus propias cartas
     if (!me.deck || me.deck.length === 0) {
@@ -541,6 +544,7 @@ function drawCard(type) {
     }
     me.hand.push(me.deck.shift());
   } else {
+
 
 
     // Validar ronda par para cartas de apoyo
