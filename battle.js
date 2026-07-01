@@ -505,17 +505,25 @@ function drawCard(type) {
     }
     me.hand.push(me.deck.shift());
   } else {
-    if (!activeBattle.supportPool || activeBattle.supportPool.length === 0) {
-      alert("No quedan cartas de apoyo.");
+    // Validar ronda par para cartas de apoyo
+    if (activeBattle.round % 2 !== 0) {
+      alert("Las cartas de apoyo solo se pueden robar en rondas pares (cada 2 rondas).");
       return;
     }
-    const idx = Math.floor(Math.random() * activeBattle.supportPool.length);
-    me.hand.push({ ...activeBattle.supportPool[idx], instanceId: `drawn_${Math.random()}` });
+
+    const pool = activeBattle.supportPool || [];
+    if (pool.length === 0) {
+      alert("No quedan cartas de apoyo en la partida.");
+      return;
+    }
+    const idx = Math.floor(Math.random() * pool.length);
+    me.hand.push({ ...pool[idx], instanceId: `drawn_${Math.random()}` });
   }
 
   me.hasDrawn = true;
   pushMyUpdate(me);
 }
+
 
 function playCardToSlot(cardInstanceId, slotIndex) {
   if (!activeBattle || activeBattle.phase !== "placement") return;
@@ -645,6 +653,11 @@ function renderBattle() {
   const endBtn = document.getElementById("btn-end-turn");
 
   const isPlacing = phase === "placement";
+  const isEvenRound = activeBattle.round % 2 === 0;
+
+  // Actualizar etiquetas indicativas en los botones
+  btnDeck.textContent = "🎴 Robar de Baraja Inicial";
+  btnSupport.textContent = isEvenRound ? "🔮 Robar Carta de Apoyo" : "🔒 Apoyo (Rondas Pares)";
 
   if (!isPlacing || myData.hasDrawn) {
     drawPhase.style.opacity = "0.4";
@@ -653,10 +666,17 @@ function renderBattle() {
   } else {
     drawPhase.style.opacity = "1";
     btnDeck.disabled = false;
-    btnSupport.disabled = false;
+    // El botón de apoyo se habilita solo en rondas pares
+    btnSupport.disabled = !isEvenRound;
+    if (!isEvenRound) {
+      btnSupport.style.opacity = "0.5";
+    } else {
+      btnSupport.style.opacity = "1";
+    }
   }
 
   if (myData.ready || !isPlacing) {
+
     endBtn.disabled = true;
     endBtn.textContent = isRevealing ? "⚔️ ¡Combatiendo!" : "Esperando al rival...";
   } else {
