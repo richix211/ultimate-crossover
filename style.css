@@ -916,6 +916,14 @@ body {
   gap: 24px;
 }
 
+/* Catálogo multi-expansión */
+.shop-catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  margin-bottom: 0;
+}
+
 .shop-buy-card {
   text-align: center;
   display: flex;
@@ -975,11 +983,23 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 30px;
+  justify-content: flex-start;
+  gap: 24px;
   width: 100%;
-  max-width: 800px;
-  margin: 0 auto;
+  max-width: 900px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 30px 20px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--neon-cyan) transparent;
+}
+
+.pack-expansion-label {
+  font-family: var(--font-title);
+  font-size: 0.65rem;
+  letter-spacing: 3px;
+  color: var(--neon-pink);
+  margin-top: -8px;
 }
 
 .booster-pack-sealed {

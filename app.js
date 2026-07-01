@@ -798,132 +798,213 @@ function updateDeckBuilderLists() {
   });
 }
 
-// --- TIENDA DE SOBRES ---
+// --- TIENDA DE SOBRES (SISTEMA MULTI-EXPANSIÓN) ---
+
+// Definición de tipos de sobres — añade aquí nuevas expansiones en el futuro
+const PACK_TYPES = [
+  {
+    id: "base",
+    name: "Sobre Base \"Ultimate Crossover\"",
+    emoji: "📦",
+    description: "Contiene 5 cartas aleatorias oficiales y crossover de la expansión Base. ¡Garantiza al menos una Rara o superior!",
+    price: 500,
+    color: "var(--neon-cyan)",
+    gradient: "linear-gradient(135deg, #1f2336 0%, #0d0f17 100%)",
+    rates: { common: 70, rare: 20, epic: 8, legendary: 2 },
+    cardsPerPack: 5,
+    // Filtro de cartas para este sobre (por ahora todas)
+    cardFilter: (card) => true
+  }
+  // Futuras expansiones se añaden aquí, por ejemplo:
+  // { id: "promo", name: "Sobre Promo Evento", emoji: "🎉", price: 300, ... }
+];
+
 function setupShopEvents() {
-  const buyBtn = document.getElementById("btn-buy-pack");
-  const openBtn = document.getElementById("btn-trigger-open-pack");
-  const overlay = document.getElementById("pack-opening-overlay");
-  const packModel = document.getElementById("booster-pack-model");
-  const revealedGrid = document.getElementById("revealed-cards-container");
-  const finishBtn = document.getElementById("btn-finish-opening");
-
-  buyBtn.onclick = () => {
-    syncUserData(() => {
-      if (currentUser.karm < 500) {
-        alert("No tienes suficientes Karms (necesitas 500).");
-        return;
-      }
-
-      currentUser.karm -= 500;
-      if (!currentUser.packs) currentUser.packs = { base: 0 };
-      currentUser.packs.base = (currentUser.packs.base || 0) + 1;
-
-      db.ref(`users/${currentUser.username}/karm`).set(currentUser.karm);
-      db.ref(`users/${currentUser.username}/packs/base`).set(currentUser.packs.base, () => {
-        updateShopUI();
-        alert("¡Sobre Base comprado!");
-      });
-    });
-  };
-
-  openBtn.onclick = () => {
-    syncUserData(() => {
-      const basePacks = currentUser.packs ? (currentUser.packs.base || 0) : 0;
-      if (basePacks <= 0) return;
-      
-      currentUser.packs.base--;
-      db.ref(`users/${currentUser.username}/packs/base`).set(currentUser.packs.base, () => {
-        updateShopUI();
-        
-        overlay.classList.remove("hidden");
-        packModel.classList.remove("ripping");
-        packModel.classList.remove("hidden");
-        revealedGrid.classList.add("hidden");
-        finishBtn.classList.add("hidden");
-      });
-    });
-  };
-
-  packModel.onclick = () => {
+  // Los botones se generan dinámicamente en updateShopUI
+  // Solo configurar el overlay de apertura
+  document.getElementById("booster-pack-model").onclick = () => {
+    const packModel = document.getElementById("booster-pack-model");
     packModel.classList.add("ripping");
     setTimeout(() => {
       packModel.classList.add("hidden");
-      generateBoosterCards();
+      generateBoosterCards(currentOpeningPackId);
     }, 600);
   };
 
-  finishBtn.onclick = () => {
-    overlay.classList.add("hidden");
+  document.getElementById("btn-finish-opening").onclick = () => {
+    document.getElementById("pack-opening-overlay").classList.add("hidden");
+    updateShopUI();
     updateLobbyUI();
   };
 }
 
+let currentOpeningPackId = "base"; // El tipo de sobre que se está abriendo
+
 function updateShopUI() {
   if (!currentUser) return;
   document.getElementById("shop-karm-balance").textContent = currentUser.karm;
-  
-  const basePacks = currentUser.packs ? (currentUser.packs.base || 0) : 0;
-  document.getElementById("shop-pack-count-base").textContent = basePacks;
-  
-  const openBtn = document.getElementById("btn-trigger-open-pack");
-  if (basePacks > 0) {
-    openBtn.removeAttribute("disabled");
-    openBtn.disabled = false;
-  } else {
-    openBtn.setAttribute("disabled", "true");
-    openBtn.disabled = true;
-  }
+
+  const packs = currentUser.packs || {};
+
+  // === Renderizar catálogo de sobres disponibles para comprar ===
+  const catalog = document.getElementById("shop-packs-catalog");
+  catalog.innerHTML = "";
+  PACK_TYPES.forEach(pack => {
+    const card = document.createElement("div");
+    card.className = "glass-card shop-buy-card";
+    card.innerHTML = `
+      <div class="shop-pack-visual" style="border-color:${pack.color}; box-shadow:0 0 20px ${pack.color}33;">${pack.emoji}</div>
+      <h2>${pack.name}</h2>
+      <p style="font-size:0.85rem; color:var(--text-muted); text-align:center;">${pack.description}</p>
+      <div class="rarity-rates">
+        <span>Común: ${pack.rates.common}%</span> | <span>Rara: ${pack.rates.rare}%</span> |
+        <span>Épica: ${pack.rates.epic}%</span> | <span>Legendaria: ${pack.rates.legendary}%</span>
+      </div>
+      <div class="price-tag" style="color:var(--neon-gold);">${pack.price} Karms</div>
+      <button class="btn btn-primary btn-glow" id="btn-buy-pack-${pack.id}" onclick="buyPack('${pack.id}')">
+        Comprar Sobre
+      </button>
+    `;
+    catalog.appendChild(card);
+  });
+
+  // === Renderizar inventario de sobres del jugador ===
+  const inventoryList = document.getElementById("shop-packs-inventory-list");
+  inventoryList.innerHTML = "";
+  PACK_TYPES.forEach(pack => {
+    const qty = packs[pack.id] || 0;
+    const row = document.createElement("div");
+    row.className = "currency-item";
+    row.style.cssText = "justify-content:space-between; display:flex; width:100%; align-items:center;";
+    row.innerHTML = `
+      <span>${pack.emoji} ${pack.name}</span>
+      <strong style="color:${qty > 0 ? 'var(--neon-cyan)' : 'var(--text-muted)'}">${qty}</strong>
+    `;
+    inventoryList.appendChild(row);
+  });
+
+  // === Renderizar botones de apertura ===
+  const openButtons = document.getElementById("shop-open-buttons");
+  openButtons.innerHTML = "";
+  PACK_TYPES.forEach(pack => {
+    const qty = packs[pack.id] || 0;
+    const btn = document.createElement("button");
+    btn.className = "btn btn-accent btn-glow";
+    btn.textContent = `✨ Abrir ${pack.name}`;
+    btn.disabled = qty <= 0;
+    btn.style.opacity = qty <= 0 ? "0.4" : "1";
+    btn.onclick = () => openPack(pack.id);
+    openButtons.appendChild(btn);
+  });
 }
 
-function generateBoosterCards() {
+window.buyPack = function(packId) {
+  const pack = PACK_TYPES.find(p => p.id === packId);
+  if (!pack) return;
+
+  syncUserData(() => {
+    if (currentUser.karm < pack.price) {
+      alert(`No tienes suficientes Karms. Necesitas ${pack.price}, tienes ${currentUser.karm}.`);
+      return;
+    }
+    currentUser.karm -= pack.price;
+    if (!currentUser.packs) currentUser.packs = {};
+    currentUser.packs[packId] = (currentUser.packs[packId] || 0) + 1;
+
+    db.ref(`users/${currentUser.username}/karm`).set(currentUser.karm);
+    db.ref(`users/${currentUser.username}/packs/${packId}`).set(currentUser.packs[packId], () => {
+      updateShopUI();
+      alert(`¡${pack.emoji} Sobre "${pack.name}" comprado!`);
+    });
+  });
+};
+
+function openPack(packId) {
+  const pack = PACK_TYPES.find(p => p.id === packId);
+  if (!pack) return;
+
+  syncUserData(() => {
+    const qty = currentUser.packs ? (currentUser.packs[packId] || 0) : 0;
+    if (qty <= 0) {
+      alert(`No tienes sobres de este tipo.`);
+      return;
+    }
+
+    currentUser.packs[packId]--;
+    db.ref(`users/${currentUser.username}/packs/${packId}`).set(currentUser.packs[packId], () => {
+      updateShopUI();
+
+      // Mostrar overlay con datos del sobre
+      currentOpeningPackId = packId;
+      const overlay = document.getElementById("pack-opening-overlay");
+      const packModel = document.getElementById("booster-pack-model");
+
+      document.getElementById("pack-opening-title").textContent = `Abriendo: ${pack.name}`;
+      document.getElementById("pack-brand-text").textContent = "ULTIMATE";
+      document.getElementById("pack-logo-text").textContent = "CROSSOVER";
+      document.getElementById("pack-expansion-label").textContent = packId.toUpperCase();
+      packModel.style.borderColor = pack.color;
+      packModel.style.boxShadow = `0 0 30px ${pack.color}`;
+
+      packModel.classList.remove("ripping", "hidden");
+      document.getElementById("revealed-cards-container").classList.add("hidden");
+      document.getElementById("revealed-cards-container").innerHTML = "";
+      document.getElementById("btn-finish-opening").classList.add("hidden");
+      overlay.classList.remove("hidden");
+    });
+  });
+}
+
+function generateBoosterCards(packId) {
+  const packDef = PACK_TYPES.find(p => p.id === (packId || "base")) || PACK_TYPES[0];
   const revealedGrid = document.getElementById("revealed-cards-container");
   const finishBtn = document.getElementById("btn-finish-opening");
   revealedGrid.innerHTML = "";
   revealedGrid.classList.remove("hidden");
 
   const cardsDrawn = [];
-  const pool = [...defaultCardsList, ...customCards];
+  const fullPool = [...defaultCardsList, ...customCards];
+  // Filtrar según la definición del pack
+  const pool = fullPool.filter(packDef.cardFilter);
 
-  const commons = pool.filter(c => c.rarity === "common");
-  const rares = pool.filter(c => c.rarity === "rare");
-  const epics = pool.filter(c => c.rarity === "epic");
+  const commons     = pool.filter(c => c.rarity === "common");
+  const rares       = pool.filter(c => c.rarity === "rare");
+  const epics       = pool.filter(c => c.rarity === "epic");
   const legendaries = pool.filter(c => c.rarity === "legendary");
 
-  const localRarityLabels = {
-    common: "Común",
-    rare: "Rara",
-    epic: "Épica",
-    legendary: "Legendaria"
-  };
+  // Fallback si algún pool está vacío
+  const safeCommons = commons.length > 0 ? commons : fullPool;
 
-  for (let i = 0; i < 5; i++) {
+  const rarityLabels = { common: "Común", rare: "Rara", epic: "Épica", legendary: "Legendaria" };
+  const rates = packDef.rates;
+
+  const totalCards = packDef.cardsPerPack || 5;
+
+  for (let i = 0; i < totalCards; i++) {
     const roll = Math.random() * 100;
-    let subPool = commons;
 
-    if (i === 4 && roll < 70) {
-      const highRoll = Math.random() * 30;
-      if (highRoll < 20 && rares.length > 0) {
-        subPool = rares;
-      } else if (highRoll < 28 && epics.length > 0) {
-        subPool = epics;
-      } else if (legendaries.length > 0) {
-        subPool = legendaries;
-      }
+    // Última carta garantiza rareza alta si sale común
+    let subPool;
+    if (i === totalCards - 1 && roll < rates.common) {
+      // Garantía: la carta final es al menos Rara
+      const highRoll = Math.random() * (rates.rare + rates.epic + rates.legendary);
+      if (highRoll < rates.rare && rares.length > 0) subPool = rares;
+      else if (highRoll < rates.rare + rates.epic && epics.length > 0) subPool = epics;
+      else if (legendaries.length > 0) subPool = legendaries;
+      else subPool = rares.length > 0 ? rares : safeCommons;
     } else {
-      if (roll < 70) {
-        subPool = commons;
-      } else if (roll < 90 && rares.length > 0) {
-        subPool = rares;
-      } else if (roll < 98 && epics.length > 0) {
-        subPool = epics;
-      } else if (legendaries.length > 0) {
-        subPool = legendaries;
-      }
+      if (roll < rates.common)                                                         subPool = safeCommons;
+      else if (roll < rates.common + rates.rare && rares.length > 0)                   subPool = rares;
+      else if (roll < rates.common + rates.rare + rates.epic && epics.length > 0)      subPool = epics;
+      else if (legendaries.length > 0)                                                  subPool = legendaries;
+      else subPool = safeCommons;
     }
 
-    const randomCard = subPool[Math.floor(Math.random() * subPool.length)] || commons[0];
+    const randomCard = subPool[Math.floor(Math.random() * subPool.length)];
+    if (!randomCard) continue;
     cardsDrawn.push(randomCard);
 
+    // Actualizar colección del jugador
     if (!currentUser.collection) currentUser.collection = [];
     const existing = currentUser.collection.find(item => item.cardId === randomCard.id);
     if (existing) {
@@ -936,37 +1017,43 @@ function generateBoosterCards() {
   // Guardar colección actualizada en Firebase
   db.ref(`users/${currentUser.username}/collection`).set(currentUser.collection);
 
+  // Revelar cartas una a una con animación
   cardsDrawn.forEach((card, index) => {
     const cardDiv = document.createElement("div");
     cardDiv.className = `game-card rarity-${card.rarity}`;
     cardDiv.style.opacity = "0";
-    cardDiv.style.transform = "scale(0.5)";
-    
-    const label = localRarityLabels[card.rarity] || "Común";
+    cardDiv.style.transform = "scale(0.5) rotateY(90deg)";
+
+    const label = rarityLabels[card.rarity] || "Común";
+    const patternMap = { front: "⬆️ FRENTE", adjacent: "↔️ LADOS", right: "➡️ DERECHA", defense: "🛡️ DEFENSA" };
 
     cardDiv.innerHTML = `
       <div class="card-cost">${card.cost}</div>
       <div class="card-rarity-badge">${label}</div>
       <div class="card-name" style="color:#fff;">${card.name}</div>
       <div class="card-illustration">${card.isSupport ? "🛡️" : "⚔️"}</div>
+      <div class="card-desc-tooltip">${card.description || "Carta crossover."}</div>
       <div class="card-stats">
         <div class="stat">⚔️ ${card.attack}</div>
         <div class="stat">❤️ ${card.health}</div>
+      </div>
+      <div class="card-footer-info">
+        <span class="pattern-badge">${patternMap[card.pattern] || card.pattern}</span>
       </div>
     `;
 
     revealedGrid.appendChild(cardDiv);
 
     setTimeout(() => {
-      cardDiv.style.transition = "all 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28)";
+      cardDiv.style.transition = "all 0.55s cubic-bezier(0.18, 0.89, 0.32, 1.28)";
       cardDiv.style.opacity = "1";
-      cardDiv.style.transform = "scale(1)";
-    }, index * 400);
+      cardDiv.style.transform = "scale(1) rotateY(0deg)";
+    }, index * 450);
   });
 
   setTimeout(() => {
     finishBtn.classList.remove("hidden");
-  }, 5 * 400);
+  }, totalCards * 450 + 200);
 }
 
 // --- CONSOLA DE ADMINISTRADOR (FIREBASE) ---
@@ -979,7 +1066,11 @@ function renderAdminPanel() {
       let idx = 0;
       snapshot.forEach(child => {
         const u = child.val();
-        const basePacks = u.packs ? (u.packs.base || 0) : 0;
+        // Mostrar todos los tipos de sobres
+        const packsText = PACK_TYPES.map(pt => {
+          const qty = u.packs ? (u.packs[pt.id] || 0) : 0;
+          return `${pt.emoji} ${qty}`;
+        }).join(" | ");
         const cardsTotal = u.collection ? u.collection.reduce((acc, curr) => acc + curr.qty, 0) + 12 : 12;
 
         const tr = document.createElement("tr");
@@ -987,10 +1078,10 @@ function renderAdminPanel() {
           <td><strong>${u.username}</strong><br><small>${u.email}</small></td>
           <td>${u.friendCode}</td>
           <td>🪙 ${u.karm}</td>
-          <td>📦 ${basePacks} Sobres</td>
+          <td>${packsText}</td>
           <td>🎴 ${cardsTotal} Cartas</td>
           <td>
-            <button class="btn btn-warning btn-sm" onclick="giftPackToUser('${u.username}')">🎁 Regalar Sobre</button>
+            ${PACK_TYPES.map(pt => `<button class="btn btn-warning btn-sm" style="margin:2px;" onclick="giftPackToUser('${u.username}','${pt.id}')">🎁 ${pt.emoji}</button>`).join("")}
           </td>
         `;
         tbody.appendChild(tr);
@@ -1000,19 +1091,21 @@ function renderAdminPanel() {
   });
 }
 
-window.giftPackToUser = function(targetUsername) {
+window.giftPackToUser = function(targetUsername, packId) {
+  const pack = PACK_TYPES.find(p => p.id === packId) || PACK_TYPES[0];
   db.ref(`users/${targetUsername}/packs`).once("value", (snapshot) => {
-    let currentPacks = { base: 0 };
+    let currentPacks = {};
     if (snapshot.exists()) {
       const snapVal = snapshot.val();
+      // Compatibilidad con formato viejo (número directo)
       if (typeof snapVal === "number") currentPacks.base = snapVal;
-      else currentPacks = snapVal;
+      else currentPacks = snapVal || {};
     }
-    
-    currentPacks.base = (currentPacks.base || 0) + 1;
-    
+
+    currentPacks[pack.id] = (currentPacks[pack.id] || 0) + 1;
+
     db.ref(`users/${targetUsername}/packs`).set(currentPacks, () => {
-      alert(`¡Se ha regalado 1 sobre a ${targetUsername}!`);
+      alert(`¡Se ha regalado 1 sobre "${pack.name}" a ${targetUsername}!`);
       renderAdminPanel();
     });
   });

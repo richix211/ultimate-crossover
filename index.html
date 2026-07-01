@@ -320,51 +320,19 @@
         </div>
       </div>
 
-      <div class="shop-content">
-        <!-- Compra de Booster Packs -->
-        <div class="glass-card shop-buy-card">
-          <div class="shop-pack-visual">📦</div>
-          <h2>Sobre Base "Ultimate Crossover"</h2>
-          <p>Contiene 5 cartas aleatorias oficiales y crossover de la expansión Base. ¡Asegura al menos una carta Rara o superior!</p>
-          <div class="rarity-rates">
-            <span>Común: 70%</span> | <span>Rara: 20%</span> | <span>Épica: 8%</span> | <span>Legendaria: 2%</span>
-          </div>
-          <div class="price-tag">500 Karms</div>
-          <button id="btn-buy-pack" class="btn btn-primary btn-glow">Comprar Sobre</button>
-        </div>
-
-        <!-- Inventario de apertura estructurado -->
-        <div class="glass-card shop-inventory-card">
-          <h2>Mis Sobres Disponibles</h2>
-          <div id="shop-packs-inventory-list" style="width: 100%; display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
-            <!-- Expansiones listadas de forma estructurada para un futuro -->
-            <div class="currency-item" style="justify-content: space-between; display: flex; width: 100%;">
-              <span>📦 Sobre Base Crossover</span>
-              <strong id="shop-pack-count-base">0</strong>
-            </div>
-          </div>
-          <button id="btn-trigger-open-pack" class="btn btn-accent btn-glow">Abrir Sobre Base</button>
-        </div>
+      <!-- Catálogo de Sobres (renderizado dinámicamente por JS) -->
+      <div id="shop-packs-catalog" class="shop-catalog-grid">
+        <!-- Las tarjetas de expansión se inyectan aquí por updateShopUI() -->
       </div>
 
-
-      <!-- Pantalla Completa / Overlay de Apertura de Sobres (Animación Premium) -->
-      <div id="pack-opening-overlay" class="overlay hidden">
-        <div class="opening-animation-container">
-          <!-- Booster pack flotando -->
-          <div id="booster-pack-model" class="booster-pack-sealed">
-            <div class="pack-brand">ULTIMATE</div>
-            <div class="pack-logo">CROSSOVER</div>
-            <div class="pack-click-msg">¡HAZ CLIC PARA ROMPER!</div>
-          </div>
-
-          <!-- Grid de revelación de cartas -->
-          <div id="revealed-cards-container" class="revealed-cards-grid hidden">
-            <!-- Aquí irán apareciendo las 5 cartas de una en una al hacer clic -->
-          </div>
-
-          <button id="btn-finish-opening" class="btn btn-accent hidden">Recoger Cartas</button>
+      <!-- Inventario de Sobres del Jugador -->
+      <div class="glass-card shop-inventory-card" style="margin-top:24px;">
+        <h2>Mis Sobres Disponibles</h2>
+        <div id="shop-packs-inventory-list" style="width:100%; display:flex; flex-direction:column; gap:12px; margin-bottom:20px;">
+          <!-- Listado dinámico de sobres en inventario -->
         </div>
+        <!-- El botón de abrir se genera dinámicamente por JS -->
+        <div id="shop-open-buttons" style="display:flex; flex-wrap:wrap; gap:12px; justify-content:center;"></div>
       </div>
     </section>
 
@@ -533,6 +501,28 @@
       </div>
     </section>
 
+  </div>
+
+  <!-- OVERLAY DE APERTURA DE SOBRES: FUERA DEL APP-CONTAINER para que position:fixed funcione correctamente -->
+  <div id="pack-opening-overlay" class="overlay hidden">
+    <div class="opening-animation-container">
+
+      <!-- Título dinámico del sobre -->
+      <div id="pack-opening-title" style="font-family:var(--font-title); font-size:1.1rem; color:var(--neon-cyan); letter-spacing:2px; text-align:center; margin-bottom:-10px;"></div>
+
+      <!-- Booster pack animado -->
+      <div id="booster-pack-model" class="booster-pack-sealed">
+        <div class="pack-brand" id="pack-brand-text">ULTIMATE</div>
+        <div class="pack-logo" id="pack-logo-text">CROSSOVER</div>
+        <div class="pack-expansion-label" id="pack-expansion-label"></div>
+        <div class="pack-click-msg">¡HAZ CLIC PARA ROMPER!</div>
+      </div>
+
+      <!-- Grid de revelación de cartas -->
+      <div id="revealed-cards-container" class="revealed-cards-grid hidden"></div>
+
+      <button id="btn-finish-opening" class="btn btn-accent hidden">✨ Recoger Cartas</button>
+    </div>
   </div>
 
   <!-- Cargar los Scripts JS al final -->
