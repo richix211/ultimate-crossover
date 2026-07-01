@@ -814,19 +814,17 @@ function updateDeckBuilderLists() {
 const PACK_TYPES = [
   {
     id: "base",
-    name: "Sobre Base \"Ultimate Crossover\"",
-    emoji: "📦",
-    description: "Contiene 5 cartas aleatorias oficiales y crossover de la expansión Base. ¡Garantiza al menos una Rara o superior!",
+    name: "Sobre Expansión \"Galaxy\"",
+    emoji: "🌌",
+    image: "sobre_galaxy.png",
+    description: "Contiene 5 cartas aleatorias oficiales y crossover de la expansión Galaxy. ¡Garantiza al menos una Rara o superior!",
     price: 500,
     color: "var(--neon-cyan)",
     gradient: "linear-gradient(135deg, #1f2336 0%, #0d0f17 100%)",
     rates: { common: 70, rare: 20, epic: 8, legendary: 2 },
     cardsPerPack: 5,
-    // Filtro de cartas para este sobre (por ahora todas)
     cardFilter: (card) => true
   }
-  // Futuras expansiones se añaden aquí, por ejemplo:
-  // { id: "promo", name: "Sobre Promo Evento", emoji: "🎉", price: 300, ... }
 ];
 
 function setupShopEvents() {
@@ -870,7 +868,16 @@ function updateShopUI() {
     // Crear elementos individualmente para evitar problemas con caracteres especiales
     const visual = document.createElement("div");
     visual.className = "shop-pack-visual";
-    visual.textContent = pack.emoji;
+    if (pack.image) {
+      visual.textContent = "";
+      visual.style.backgroundImage = `url('${pack.image}')`;
+      visual.style.backgroundSize = "cover";
+      visual.style.backgroundPosition = "center";
+      visual.style.borderRadius = "8px";
+      visual.style.border = "none";
+    } else {
+      visual.textContent = pack.emoji;
+    }
 
     const title = document.createElement("h2");
     title.textContent = pack.name;
@@ -900,6 +907,7 @@ function updateShopUI() {
     card.appendChild(buyBtn);
     catalog.appendChild(card);
   });
+
 
   // === Inventario del jugador ===
   const inventoryList = document.getElementById("shop-packs-inventory-list");
@@ -983,9 +991,26 @@ function openPack(packId) {
       const packModel = document.getElementById("booster-pack-model");
 
       document.getElementById("pack-opening-title").textContent = `Abriendo: ${pack.name}`;
-      document.getElementById("pack-brand-text").textContent = "ULTIMATE";
-      document.getElementById("pack-logo-text").textContent = "CROSSOVER";
-      document.getElementById("pack-expansion-label").textContent = packId.toUpperCase();
+      
+      // Personalizar el modelo de sobre con su imagen
+      if (pack.image) {
+        packModel.style.backgroundImage = `url('${pack.image}')`;
+        packModel.style.backgroundSize = "cover";
+        packModel.style.backgroundPosition = "center";
+        // Ocultar textos por defecto si hay imagen
+        document.getElementById("pack-brand-text").style.display = "none";
+        document.getElementById("pack-logo-text").style.display = "none";
+        document.getElementById("pack-expansion-label").style.display = "none";
+      } else {
+        packModel.style.backgroundImage = "none";
+        document.getElementById("pack-brand-text").style.display = "block";
+        document.getElementById("pack-logo-text").style.display = "block";
+        document.getElementById("pack-expansion-label").style.display = "block";
+        document.getElementById("pack-brand-text").textContent = "ULTIMATE";
+        document.getElementById("pack-logo-text").textContent = "CROSSOVER";
+        document.getElementById("pack-expansion-label").textContent = packId.toUpperCase();
+      }
+
       packModel.style.borderColor = pack.color;
       packModel.style.boxShadow = `0 0 30px ${pack.color}`;
 
@@ -997,6 +1022,7 @@ function openPack(packId) {
     });
   });
 }
+
 
 function generateBoosterCards(packId) {
   const packDef = PACK_TYPES.find(p => p.id === (packId || "base")) || PACK_TYPES[0];
