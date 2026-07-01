@@ -686,6 +686,7 @@ function renderDeckBuilder() {
       <div class="card-rarity-badge">${getRarityStyle(card.rarity).text} (x${qty})</div>
       <div class="card-name" style="color:#fff;">${card.name}</div>
       <div class="card-illustration">${card.isSupport ? "🛡️" : "⚔️"}</div>
+      <div class="card-desc-tooltip">${card.description || "Carta crossover."}</div>
       <div class="card-stats">
         <div class="stat">⚔️ ${card.attack}</div>
         <div class="stat">❤️ ${card.health}</div>

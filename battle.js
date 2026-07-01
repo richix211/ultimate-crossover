@@ -223,9 +223,14 @@ function updateBattleState() {
 
 // --- PROCESAR FASE DE COMBATE (EJECUTADO POR JUGADOR 1 EN LA NUBE) ---
 function processCombatPhase() {
-  let log = `Ronda ${activeBattle.round} - Combate finalizado. \n`;
   const p1 = activeBattle.player1;
   const p2 = activeBattle.player2;
+
+  // ROMPER RECURSIÓN: Desactivar 'ready' de inmediato antes de procesar
+  p1.ready = false;
+  p2.ready = false;
+
+  let log = `Ronda ${activeBattle.round} - Combate finalizado. \n`;
 
   if (!p1.board) p1.board = [null, null, null, null, null];
   if (!p2.board) p2.board = [null, null, null, null, null];

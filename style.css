@@ -611,6 +611,30 @@ body {
   transform: translateY(-8px) scale(1.02);
 }
 
+/* Tooltip de descripción en hover */
+.card-desc-tooltip {
+  position: absolute;
+  bottom: 38px;
+  left: 5%;
+  width: 90%;
+  background: rgba(10, 11, 16, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 6px;
+  font-size: 0.65rem;
+  color: #f1f3f9;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 10;
+  line-height: 1.2;
+}
+
+.game-card:hover .card-desc-tooltip {
+  opacity: 1;
+}
+
 /* Rarezas */
 .rarity-common {
   border-color: rgba(255, 255, 255, 0.2);
