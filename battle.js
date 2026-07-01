@@ -7,8 +7,30 @@ let activeBattle = null;
 let localRole = null;
 let dragSelectedCardId = null;
 let battleListenerRef = null;
-let combatProcessed = false; // Evitar doble procesamiento
-let gameEndHandled = false;  // Evitar doble llamada a fin de juego
+let combatProcessed = false;
+let gameEndHandled = false;
+
+// Convierte lo que Firebase devuelve (puede ser objeto sparse) en un array limpio de 5 slots
+function normalizeBoard(board) {
+  const result = [null, null, null, null, null];
+  if (!board) return result;
+  for (let i = 0; i < 5; i++) {
+    const val = board[i] || board[String(i)];
+    result[i] = (val && typeof val === 'object' && val.id) ? val : null;
+  }
+  return result;
+}
+
+// Convierte el board a un objeto con claves "0"-"4" para que Firebase
+// preserve los slots vacíos (Firebase ignora null en arrays pero respeta objetos)
+function serializeBoard(board) {
+  const obj = {};
+  for (let i = 0; i < 5; i++) {
+    obj[String(i)] = board[i] ? board[i] : null;
+  }
+  return obj;
+}
+
 
 // ==========================================================================
 // INICIO DE BATALLA
@@ -45,7 +67,7 @@ function initiateBattleRoom(duelData, role) {
 
       const battle = {
         id: battleId,
-        phase: "placement", // placement | revealing | combat | roundEnd
+        phase: "placement",
         round: 1,
         combatLog: "¡Comienza el duelo! Ronda 1 — Roba una carta y coloca tus guerreros.",
         gameEnded: false,
@@ -57,7 +79,7 @@ function initiateBattleRoom(duelData, role) {
           energy: 1,
           deck: p1Deck,
           hand: initialHand1,
-          board: [null, null, null, null, null],
+          board: serializeBoard([null, null, null, null, null]),
           hasDrawn: false,
           ready: false
         },
@@ -67,7 +89,7 @@ function initiateBattleRoom(duelData, role) {
           energy: 1,
           deck: p2Deck,
           hand: initialHand2,
-          board: [null, null, null, null, null],
+          board: serializeBoard([null, null, null, null, null]),
           hasDrawn: false,
           ready: false
         }
@@ -180,6 +202,11 @@ function executeCombatPhase() {
   const p1 = JSON.parse(JSON.stringify(activeBattle.player1));
   const p2 = JSON.parse(JSON.stringify(activeBattle.player2));
 
+  // CRÍTICO: normalizar los boards a arrays limpios de 5 elementos
+  // Firebase puede devolver arrays con nulls como objetos sparse {"0": card, "2": card}
+  p1.board = normalizeBoard(p1.board);
+  p2.board = normalizeBoard(p2.board);
+
   const logs = [];
 
   // Aplicar ataques de cada carril
@@ -188,14 +215,14 @@ function executeCombatPhase() {
     const c2 = p2.board[i];
 
     if (c1 && c1.pattern !== "defense" && c1.attack > 0) {
-      applyAttack(c1, i, p2, logs, c1.pattern, true);
+      applyAttack(c1, i, p2, logs, c1.pattern);
     }
     if (c2 && c2.pattern !== "defense" && c2.attack > 0) {
-      applyAttack(c2, i, p1, logs, c2.pattern, false);
+      applyAttack(c2, i, p1, logs, c2.pattern);
     }
   }
 
-  // Limpiar cartas con vida <= 0
+  // Eliminar cartas destruidas (vida <= 0)
   for (let i = 0; i < 5; i++) {
     if (p1.board[i] && p1.board[i].health <= 0) {
       logs.push(`💀 ${p1.board[i].name} (J1) fue destruida.`);
@@ -209,6 +236,10 @@ function executeCombatPhase() {
 
   p1.hp = Math.max(0, p1.hp);
   p2.hp = Math.max(0, p2.hp);
+
+  // Convertir board a formato aceptado por Firebase (sin nulls como objeto)
+  p1.board = serializeBoard(p1.board);
+  p2.board = serializeBoard(p2.board);
 
   // Verificar ganador
   let gameEnded = false;
@@ -350,19 +381,23 @@ function playCardToSlot(cardInstanceId, slotIndex) {
     return;
   }
 
-  if (!me.board) me.board = [null, null, null, null, null];
-  if (me.board[slotIndex]) {
+  // Normalizar el board antes de leer para evitar problemas con Firebase
+  const currentBoard = normalizeBoard(me.board);
+  if (currentBoard[slotIndex]) {
     alert("Este carril ya está ocupado.");
     return;
   }
 
   me.energy -= card.cost;
   me.hand.splice(cardIdx, 1);
-  me.board[slotIndex] = card;
+  currentBoard[slotIndex] = card;
+  // Serializar como objeto con claves string para Firebase
+  me.board = serializeBoard(currentBoard);
   activeBattle.combatLog = `${me.username} colocó [${card.name}] en el carril ${slotIndex + 1}.`;
 
   pushMyUpdate(me);
 }
+
 
 function endPlacementPhase() {
   if (!activeBattle || activeBattle.phase !== "placement") return;
@@ -425,6 +460,10 @@ function renderBattle() {
   const phase = activeBattle.phase;
   const isRevealing = phase === "revealing" || phase === "combat";
 
+  // Normalizar boards (por si Firebase los devuelve como objetos)
+  const myBoard = normalizeBoard(myData.board);
+  const oppBoard = normalizeBoard(oppData.board);
+
   // Nombres y estadísticas
   document.getElementById("player-name-display").textContent = `${myData.username} (Tú)`;
   document.getElementById("enemy-name-display").textContent = oppData.username;
@@ -478,8 +517,8 @@ function renderBattle() {
 
   // Tableros
   renderHand(myData.hand || [], myData.energy);
-  renderBoardSlots("player-board", myData.board || [null,null,null,null,null], true, isRevealing);
-  renderBoardSlots("enemy-board", oppData.board || [null,null,null,null,null], false, isRevealing);
+  renderBoardSlots("player-board", myBoard, true, isRevealing);
+  renderBoardSlots("enemy-board", oppBoard, false, isRevealing);
 }
 
 // ==========================================================================
