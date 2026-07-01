@@ -1,0 +1,15 @@
+# Archivos temporales de sistema
+.DS_Store
+Thumbs.db
+
+# Logs y bases de datos locales temporales
+*.log
+npm-debug.log*
+
+# Configuraciones de editores
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln

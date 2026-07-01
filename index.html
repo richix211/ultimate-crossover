@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ultimate Crossover - Card Battler</title>
+  <!-- Google Fonts para estilo futurista y premium -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- CONTENEDOR PRINCIPAL DE LA APP -->
+  <div id="app-container">
+
+    <!-- PANTALLA 1: LOGIN Y REGISTRO -->
+    <section id="screen-auth" class="screen active">
+      <div class="glass-card auth-card">
+        <h1 class="logo-text">ULTIMATE<br><span>CROSSOVER</span></h1>
+        <p class="subtitle">La arena definitiva de cartas coleccionables</p>
+
+        <!-- Formulario Login -->
+        <div id="auth-login-view">
+          <h2>Iniciar Sesión</h2>
+          <form id="form-login">
+            <div class="input-group">
+              <label for="login-username">Usuario o Email</label>
+              <input type="text" id="login-username" required placeholder="Ej: admin o paul">
+            </div>
+            <div class="input-group">
+              <label for="login-password">Contraseña</label>
+              <input type="password" id="login-password" required placeholder="••••••••">
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">Entrar al Nexo</button>
+          </form>
+          <p class="auth-switch">¿No tienes cuenta? <span id="go-to-register">Regístrate gratis</span></p>
+        </div>
+
+        <!-- Formulario Registro -->
+        <div id="auth-register-view" class="hidden">
+          <h2>Registrarse</h2>
+          <form id="form-register">
+            <div class="input-group">
+              <label for="register-username">Nombre de Usuario</label>
+              <input type="text" id="register-username" required placeholder="Ej: cardmaster">
+            </div>
+            <div class="input-group">
+              <label for="register-email">Correo Electrónico</label>
+              <input type="email" id="register-email" required placeholder="Ej: amigo@correo.com">
+            </div>
+            <div class="input-group">
+              <label for="register-password">Contraseña</label>
+              <input type="password" id="register-password" required placeholder="Mínimo 6 caracteres">
+            </div>
+            <button type="submit" class="btn btn-accent btn-block">Crear Cuenta</button>
+          </form>
+          <p class="auth-switch">¿Ya tienes cuenta? <span id="go-to-login">Inicia Sesión</span></p>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- PANTALLA 2: DASHBOARD / LOBBY PRINCIPAL -->
+    <section id="screen-lobby" class="screen">
+      <!-- Encabezado de Perfil / Estado -->
+      <header class="lobby-header">
+        <div class="user-profile-badge">
+          <div class="avatar-glow"></div>
+          <div>
+            <h3 id="lobby-display-name">Usuario</h3>
+            <span id="lobby-display-code" class="friend-code-badge">CÓDIGO: #0000</span>
+          </div>
+        </div>
+
+        <div class="currency-display">
+          <div class="currency-item">
+            <span class="coin-icon">🪙</span>
+            <div>
+              <span class="label">Karms</span>
+              <span id="lobby-karm-balance" class="value">0</span>
+            </div>
+          </div>
+          <div class="currency-item">
+            <span class="pack-icon">📦</span>
+            <div>
+              <span class="label">Sobres</span>
+              <span id="lobby-pack-balance" class="value">0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <button id="btn-admin-console" class="btn btn-warning hidden">⚙️ Admin</button>
+          <button id="btn-logout" class="btn btn-danger">Salir</button>
+        </div>
+      </header>
+
+      <!-- Panel de Recompensa Diaria (Karms Semanales) -->
+      <div class="glass-card daily-reward-panel">
+        <h3>🎁 Recompensa Diaria Semanal</h3>
+        <p class="reward-desc">¡Reclama tu Karm diario para comprar sobres de la expansión Base!</p>
+        <div class="days-grid">
+          <div class="day-card" data-day="1"><span>Lunes</span><strong class="karm-amount">+100</strong></div>
+          <div class="day-card" data-day="2"><span>Martes</span><strong class="karm-amount">+150</strong></div>
+          <div class="day-card" data-day="3"><span>Miércoles</span><strong class="karm-amount">+200</strong></div>
+          <div class="day-card" data-day="4"><span>Jueves</span><strong class="karm-amount">+250</strong></div>
+          <div class="day-card" data-day="5"><span>Viernes</span><strong class="karm-amount">+300</strong></div>
+          <div class="day-card" data-day="6"><span>Sábado</span><strong class="karm-amount">+400</strong></div>
+          <div class="day-card" data-day="7"><span>Domingo</span><strong class="karm-amount">+500</strong></div>
+        </div>
+        <button id="btn-claim-daily" class="btn btn-accent btn-glow">Reclamar Karm de Hoy</button>
+      </div>
+
+      <!-- Grid Principal de Funciones -->
+      <div class="lobby-grid">
+        <!-- Menú Navegación -->
+        <div class="menu-column">
+          <button id="menu-btn-play" class="menu-card play-card">
+            <h2>JUGAR COMBATE</h2>
+            <p>Emparejamiento real en pantalla o salas de duelo</p>
+          </button>
+          <div class="submenu-cards">
+            <button id="menu-btn-creator" class="menu-card creator-card">
+              <h3>✨ Creador de Cartas</h3>
+              <p>Diseña luchadores personalizados</p>
+            </button>
+            <button id="menu-btn-deck" class="menu-card deck-card">
+              <h3>🎴 Álbum y Barajas</h3>
+              <p>Crea tu mazo de 10 cartas con copias</p>
+            </button>
+            <button id="menu-btn-shop" class="menu-card shop-card">
+              <h3>🛒 Tienda de Sobres</h3>
+              <p>Abre boosters por 500 Karms</p>
+            </button>
+          </div>
+        </div>
+
+        <!-- Columna Social (Amigos y Duelos) -->
+        <div class="glass-card social-column">
+          <h3>👥 Contactos y Amigos</h3>
+          
+          <!-- Agregar Amigo -->
+          <form id="form-add-friend" class="friend-add-form">
+            <input type="text" id="add-friend-input" placeholder="Nombre o Código (Ej: USER#1234)" required>
+            <button type="submit" class="btn btn-primary">+</button>
+          </form>
+
+          <!-- Lista Amigos -->
+          <div id="friends-list" class="friends-list-container">
+            <!-- Cargado dinámicamente -->
+            <p class="empty-text">No tienes amigos añadidos todavía.</p>
+          </div>
+
+          <!-- Invitaciones y Duelos Pendientes -->
+          <div class="pending-duels-box">
+            <h4>⚔️ Duelos Pendientes</h4>
+            <div id="pending-duels-container">
+              <p class="empty-text">Sin invitaciones de combate activas.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- PANTALLA 3: CREADOR DE CARTAS -->
+    <section id="screen-creator" class="screen">
+      <div class="back-nav">
+        <button class="btn btn-secondary btn-back-lobby">⬅️ Volver al Lobby</button>
+      </div>
+
+      <div class="creator-container">
+        <!-- Formulario del creador -->
+        <div class="glass-card creator-form-card">
+          <h2>Diseña tu Carta</h2>
+          <form id="form-create-card">
+            <div class="input-row">
+              <div class="input-group">
+                <label for="card-create-name">Nombre del Personaje</label>
+                <input type="text" id="card-create-name" maxlength="20" required placeholder="Ej: Súper Amigo">
+              </div>
+              <div class="input-group">
+                <label for="card-create-rarity">Rareza</label>
+                <select id="card-create-rarity" required>
+                  <option value="common">Común</option>
+                  <option value="rare">Rara</option>
+                  <option value="epic">Épica</option>
+                  <option value="legendary">Legendaria</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="input-row">
+              <div class="input-group">
+                <label for="card-create-cost">Coste de Monedas (0 - 4)</label>
+                <input type="number" id="card-create-cost" min="0" max="4" value="1" required>
+              </div>
+              <div class="input-group">
+                <label for="card-create-pattern">Patrón de Ataque</label>
+                <select id="card-create-pattern" required>
+                  <option value="front">Al Frente ⬆️</option>
+                  <option value="adjacent">Adyacentes (Lados) ↔️</option>
+                  <option value="right">Solo Derecha ➡️</option>
+                  <option value="defense">Solo Defensa (Escudo) 🛡️</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="input-row">
+              <div class="input-group">
+                <label for="card-create-attack">Poder de Ataque (0 - 10)</label>
+                <input type="number" id="card-create-attack" min="0" max="10" value="2" required>
+              </div>
+              <div class="input-group">
+                <label for="card-create-health">Puntos de Vida (1 - 25)</label>
+                <input type="number" id="card-create-health" min="1" max="25" value="5" required>
+              </div>
+            </div>
+
+            <div class="input-group">
+              <label for="card-create-desc">Habilidad o Descripción corta</label>
+              <input type="text" id="card-create-desc" maxlength="60" placeholder="Ej: Ataca con furia protectora.">
+            </div>
+
+            <button type="submit" class="btn btn-accent btn-block">Guardar y Añadir a la Colección</button>
+          </form>
+        </div>
+
+        <!-- Previsualización de la carta en tiempo real -->
+        <div class="card-preview-area">
+          <h3>Previsualización</h3>
+          <div id="card-creator-live-preview" class="game-card rarity-common">
+            <div class="card-cost">1</div>
+            <div class="card-rarity-badge">Común</div>
+            <div class="card-name">Personaje</div>
+            <div class="card-illustration">⚔️</div>
+            <div class="card-stats">
+              <div class="stat"><span class="stat-icon">⚔️</span> <span class="stat-val" id="preview-attack-val">2</span></div>
+              <div class="stat"><span class="stat-icon">❤️</span> <span class="stat-val" id="preview-health-val">5</span></div>
+            </div>
+            <div class="card-footer-info">
+              <span class="pattern-badge">FRENTE ⬆️</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- PANTALLA 4: ÁLBUM Y BARAJAS -->
+    <section id="screen-deck" class="screen">
+      <div class="back-nav">
+        <button class="btn btn-secondary btn-back-lobby">⬅️ Volver al Lobby</button>
+      </div>
+
+      <div class="deck-builder-layout">
+        <!-- Colección Completa -->
+        <div class="glass-card album-card">
+          <h2>Mi Álbum de Cartas</h2>
+          <p class="subtitle">Haz clic en una carta de tu colección para añadirla a tu baraja inicial (puedes repetir cartas).</p>
+          <div id="album-cards-grid" class="cards-grid">
+            <!-- Cargado dinámicamente -->
+          </div>
+        </div>
+
+        <!-- Mazo Actual / Configuración -->
+        <div class="glass-card deck-config-card">
+          <h2>Gestión de Barajas</h2>
+
+          <!-- Selector de Barajas -->
+          <div class="deck-selector-area">
+            <select id="deck-select-dropdown">
+              <!-- Barajas inyectadas dinámicamente -->
+            </select>
+            <button id="btn-create-new-deck" class="btn btn-primary btn-sm">+</button>
+            <button id="btn-delete-deck" class="btn btn-danger btn-sm">🗑️</button>
+          </div>
+
+          <!-- Nombre de la Baraja Seleccionada -->
+          <input type="text" id="deck-name-input" class="deck-rename-input" placeholder="Nombre de la baraja">
+
+          <div class="deck-stats-row">
+            <span>Mazo Principal: <strong id="deck-size-val">0</strong>/10</span>
+            <span>Apoyo: <strong id="support-size-val">0</strong>/2</span>
+          </div>
+
+          <!-- Mazo Principal de 10 Cartas -->
+          <div class="deck-list-box">
+            <h3>Cartas de Batalla (10 requeridas)</h3>
+            <div id="current-deck-list" class="deck-compact-list">
+              <!-- Cartas seleccionadas -->
+            </div>
+          </div>
+
+          <!-- Mazo de Apoyo de 2 Cartas -->
+          <div class="support-list-box">
+            <h3>Cartas de Apoyo (2 requeridas, coste 0-2)</h3>
+            <div id="current-support-list" class="deck-compact-list">
+              <!-- Cartas de apoyo -->
+            </div>
+          </div>
+
+          <button id="btn-save-deck" class="btn btn-accent btn-block">Guardar Baraja Seleccionada</button>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- PANTALLA 5: TIENDA DE SOBRES -->
+    <section id="screen-shop" class="screen">
+      <div class="back-nav">
+        <button class="btn btn-secondary btn-back-lobby">⬅️ Volver al Lobby</button>
+        <div class="currency-inline">
+          🪙 <span id="shop-karm-balance">0</span> Karms
+        </div>
+      </div>
+
+      <div class="shop-content">
+        <!-- Compra de Booster Packs -->
+        <div class="glass-card shop-buy-card">
+          <div class="shop-pack-visual">📦</div>
+          <h2>Sobre Base "Ultimate Crossover"</h2>
+          <p>Contiene 5 cartas aleatorias oficiales y crossover de la expansión Base. ¡Asegura al menos una carta Rara o superior!</p>
+          <div class="rarity-rates">
+            <span>Común: 70%</span> | <span>Rara: 20%</span> | <span>Épica: 8%</span> | <span>Legendaria: 2%</span>
+          </div>
+          <div class="price-tag">500 Karms</div>
+          <button id="btn-buy-pack" class="btn btn-primary btn-glow">Comprar Sobre</button>
+        </div>
+
+        <!-- Inventario de apertura estructurado -->
+        <div class="glass-card shop-inventory-card">
+          <h2>Mis Sobres Disponibles</h2>
+          <div id="shop-packs-inventory-list" style="width: 100%; display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
+            <!-- Expansiones listadas de forma estructurada para un futuro -->
+            <div class="currency-item" style="justify-content: space-between; display: flex; width: 100%;">
+              <span>📦 Sobre Base Crossover</span>
+              <strong id="shop-pack-count-base">0</strong>
+            </div>
+          </div>
+          <button id="btn-trigger-open-pack" class="btn btn-accent btn-glow" disabled>Abrir Sobre Base</button>
+      </div>
+
+
+      <!-- Pantalla Completa / Overlay de Apertura de Sobres (Animación Premium) -->
+      <div id="pack-opening-overlay" class="overlay hidden">
+        <div class="opening-animation-container">
+          <!-- Booster pack flotando -->
+          <div id="booster-pack-model" class="booster-pack-sealed">
+            <div class="pack-brand">ULTIMATE</div>
+            <div class="pack-logo">CROSSOVER</div>
+            <div class="pack-click-msg">¡HAZ CLIC PARA ROMPER!</div>
+          </div>
+
+          <!-- Grid de revelación de cartas -->
+          <div id="revealed-cards-container" class="revealed-cards-grid hidden">
+            <!-- Aquí irán apareciendo las 5 cartas de una en una al hacer clic -->
+          </div>
+
+          <button id="btn-finish-opening" class="btn btn-accent hidden">Recoger Cartas</button>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- PANTALLA 6: CONSOLA DE ADMINISTRADOR -->
+    <section id="screen-admin" class="screen">
+      <div class="back-nav">
+        <button class="btn btn-secondary btn-back-lobby">⬅️ Volver al Lobby</button>
+      </div>
+
+      <div class="glass-card admin-panel">
+        <h2>Consola del Administrador (fef8villa)</h2>
+        <p class="subtitle">Gestiona usuarios y distribuye sobres gratuitos de la expansión.</p>
+
+        <div class="admin-users-table-container">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Usuario</th>
+                <th>Código de Amigo</th>
+                <th>Karms</th>
+                <th>Sobres</th>
+                <th>Cartas Colección</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody id="admin-users-tbody">
+              <!-- Usuarios inyectados por js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- PANTALLA 7: MODO DE JUEGO / SALAS -->
+    <section id="screen-game-modes" class="screen">
+      <div class="back-nav">
+        <button class="btn btn-secondary btn-back-lobby">⬅️ Volver al Lobby</button>
+      </div>
+
+      <div class="game-modes-container">
+        <h1 class="screen-title">Selecciona Modo de Juego</h1>
+
+        <div class="modes-grid">
+          <!-- Duelo Amistoso (Multijugador Real) -->
+          <div class="mode-card flex-card">
+            <h2>⚔️ Duelo Amistoso</h2>
+            <p>Reta a un amigo de tu lista de amigos agregados. Ambos deben estar en línea para iniciar el combate en tiempo real.</p>
+            <button id="btn-mode-friendly" class="btn btn-accent btn-glow">Ir a Amigos para Retar</button>
+          </div>
+
+          <!-- Clasificatoria (Ranked) -->
+          <div class="mode-card disabled-card flex-card">
+            <span class="lock-icon">🔒</span>
+            <h2>🏆 Arena Clasificatoria</h2>
+            <p>Lucha por subir de rango en la tabla clasificatoria global contra jugadores aleatorios.</p>
+            <button class="btn btn-secondary" disabled>PRÓXIMAMENTE</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- PANTALLA 8: TABLERO DE COMBATE (5 CARRILES) -->
+    <section id="screen-battle" class="screen">
+      <!-- Encabezado de combate -->
+      <div class="battle-header">
+        <div class="battle-title-indicator">BATALLA MULTIJUGADOR</div>
+        <button id="btn-concede" class="btn btn-danger btn-sm">Rendirse</button>
+      </div>
+
+      <div class="battle-arena">
+        <!-- ================= ENEMIGO (ARRIBA) ================= -->
+        <div class="enemy-area">
+          <div class="player-info-bar">
+            <div class="health-container">
+              <span class="heart-icon">❤️</span>
+              <span class="health-label">Vida Rival</span>
+              <!-- Barra de Vida del Rival (Arriba a la Izquierda) -->
+              <div class="health-bar-bg">
+                <div id="enemy-health-bar" class="health-bar-fill" style="width: 100%;"></div>
+              </div>
+              <span id="enemy-health-text" class="health-value">100/100</span>
+            </div>
+            <!-- Moneda y recurso enemigo -->
+            <div class="energy-container">
+              <span class="coin-icon-small">🪙</span>
+              <span id="enemy-energy-text" class="energy-value">0/1</span>
+            </div>
+            <div id="enemy-name-display" class="battle-player-name">Rival</div>
+          </div>
+
+          <!-- TABLERO RIVAL (5 espacios de cartas arriba) -->
+          <div class="board-slots enemy-slots" id="enemy-board">
+            <div class="board-slot" data-slot="0"></div>
+            <div class="board-slot" data-slot="1"></div>
+            <div class="board-slot" data-slot="2"></div>
+            <div class="board-slot" data-slot="3"></div>
+            <div class="board-slot" data-slot="4"></div>
+          </div>
+        </div>
+
+
+        <!-- ================= ESPACIO DIVISORIO / COMBATE ================= -->
+        <div class="battle-divider">
+          <div class="combat-log-display" id="combat-status-log">¡Comienza el duelo! Elige una carta para robar.</div>
+        </div>
+
+
+        <!-- ================= JUGADOR (ABAJO) ================= -->
+        <div class="player-area">
+          <!-- TABLERO JUGADOR (5 espacios de cartas abajo) -->
+          <div class="board-slots player-slots" id="player-board">
+            <div class="board-slot" data-slot="0"></div>
+            <div class="board-slot" data-slot="1"></div>
+            <div class="board-slot" data-slot="2"></div>
+            <div class="board-slot" data-slot="3"></div>
+            <div class="board-slot" data-slot="4"></div>
+          </div>
+
+          <!-- Barra de información del Jugador -->
+          <div class="player-info-bar">
+            <div id="player-name-display" class="battle-player-name">Tú</div>
+            <!-- Moneda y recurso jugador -->
+            <div class="energy-container">
+              <span class="coin-icon-small">🪙</span>
+              <span class="energy-label">Monedas: </span>
+              <span id="player-energy-text" class="energy-value">1/1</span>
+            </div>
+
+            <div class="health-container">
+              <!-- Barra de Vida del Jugador (Abajo a la Derecha) -->
+              <span id="player-health-text" class="health-value">100/100</span>
+              <div class="health-bar-bg">
+                <div id="player-health-bar" class="health-bar-fill" style="width: 100%;"></div>
+              </div>
+              <span class="health-label">Mi Vida</span>
+              <span class="heart-icon">❤️</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- INTERFAZ DE DECISIÓN Y MANO (ABAJO DEL TABLERO) -->
+      <div class="battle-control-panel">
+        <!-- Fase de Robo Inicial/Ronda -->
+        <div id="draw-phase-controls" class="control-group">
+          <p>Selecciona qué carta robar en esta ronda:</p>
+          <button id="btn-draw-deck" class="btn btn-primary">🎴 Robar de Baraja Inicial</button>
+          <button id="btn-draw-support" class="btn btn-accent">🛡️ Robar Carta de Apoyo</button>
+        </div>
+
+        <!-- Mano de Cartas del Jugador -->
+        <div class="player-hand-container">
+          <h4>Mi Mano</h4>
+          <div id="player-hand" class="hand-row">
+            <!-- Cartas en mano -->
+          </div>
+        </div>
+
+        <!-- Acción finalizable -->
+        <div class="turn-actions">
+          <button id="btn-end-turn" class="btn btn-success btn-block" disabled>Finalizar Fase de Colocación</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Cargar los Scripts JS al final -->
+  <script src="cards_db.js"></script>
+  <script src="battle.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
