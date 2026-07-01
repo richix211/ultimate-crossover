@@ -16,13 +16,7 @@ Este es un juego de cartas de posicionamiento y combate táctico en 5 carriles e
 
 ---
 
-## 🛠️ Credenciales de Administrador
-- **Usuario:** `admin`
-- **Contraseña:** `fef8villa`
 
-*El administrador es el único con privilegios de regalar sobres y acceder al creador de cartas.*
-
----
 
 ## 🌐 Cómo jugar localmente
 1. Abre una consola en el directorio del proyecto.
