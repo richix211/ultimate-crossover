@@ -7,6 +7,13 @@ let currentUser = null;
 let customCards = []; 
 let activeDeckIndex = 0; 
 
+// Función de salida global e instantánea llamada desde HTML
+window.logoutUserDirectly = function() {
+  sessionStorage.removeItem("uc_active_user");
+  currentUser = null;
+  showScreen("screen-auth");
+};
+
 // --- INICIALIZACIÓN ---
 document.addEventListener("DOMContentLoaded", () => {
   initLocalStorage();
@@ -873,11 +880,25 @@ function updateShopUI() {
 
   document.getElementById("shop-karm-balance").textContent = currentUser.karm;
   
-  const basePacks = currentUser.packs ? (currentUser.packs.base || 0) : 0;
+  let basePacks = 0;
+  if (currentUser.packs) {
+    if (typeof currentUser.packs === "number") {
+      basePacks = currentUser.packs;
+    } else {
+      basePacks = currentUser.packs.base || 0;
+    }
+  }
+  
   document.getElementById("shop-pack-count-base").textContent = basePacks;
   
   const openBtn = document.getElementById("btn-trigger-open-pack");
-  openBtn.disabled = basePacks <= 0;
+  if (basePacks > 0) {
+    openBtn.disabled = false;
+    openBtn.removeAttribute("disabled");
+  } else {
+    openBtn.disabled = true;
+    openBtn.setAttribute("disabled", "true");
+  }
 }
 
 function generateBoosterCards() {
