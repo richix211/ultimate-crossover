@@ -1,197 +1,351 @@
 // ==========================================================================
-// BATTLE.JS - SISTEMA DE COMBATE ONLINE BLINDADO CON NIEBLA DE GUERRA
+// BATTLE.JS - SISTEMA DEFINITIVO DE COMBATE ONLINE CON FIREBASE
+// Fases: placement → revealing → combat → roundEnd → placement...
 // ==========================================================================
 
 let activeBattle = null;
-let localRole = null; // "player1" o "player2"
+let localRole = null;
 let dragSelectedCardId = null;
 let battleListenerRef = null;
-let isProcessingCombatLocal = false;
+let combatProcessed = false; // Evitar doble procesamiento
 
-// --- INICIAR SALA DE BATALLA ONLINE ---
+// ==========================================================================
+// INICIO DE BATALLA
+// ==========================================================================
+
 function initiateBattleRoom(duelData, role) {
   localRole = role;
+  combatProcessed = false;
   const battleId = duelData.id;
-  isProcessingCombatLocal = false;
 
+  // Desconectar listener de duelos del lobby
   db.ref(`duels`).off();
+  showScreen("screen-battle");
 
   if (role === "player1") {
-    db.ref(`users`).once("value", (usersSnapshot) => {
-      if (!usersSnapshot.exists()) {
-        alert("Error al cargar los usuarios.");
-        showScreen("screen-lobby");
-        return;
-      }
+    db.ref(`users`).once("value", (snap) => {
+      if (!snap.exists()) { alert("Error al cargar usuarios."); showScreen("screen-lobby"); return; }
 
-      const usersData = usersSnapshot.val();
+      const usersData = snap.val();
       const p1User = usersData[duelData.from];
       const p2User = usersData[duelData.to];
-
-      if (!p1User || !p2User) {
-        alert("Error: Jugador no encontrado.");
-        showScreen("screen-lobby");
-        return;
-      }
+      if (!p1User || !p2User) { alert("Error: jugador no encontrado."); showScreen("screen-lobby"); return; }
 
       const allCards = [...DEFAULT_CARDS, ...customCards];
-
-      const p1ActiveDeck = p1User.decks[p1User.activeDeckIdx || 0] || p1User.decks[0];
-      const p2ActiveDeck = p2User.decks[p2User.activeDeckIdx || 0] || p2User.decks[0];
-
-      const p1Deck = (p1ActiveDeck.cards || []).map(id => ({ 
-        ...allCards.find(c => c.id === id), 
-        instanceId: `p1_${id}_${Math.random()}` 
-      }));
-      const p2Deck = (p2ActiveDeck.cards || []).map(id => ({ 
-        ...allCards.find(c => c.id === id), 
-        instanceId: `p2_${id}_${Math.random()}` 
-      }));
-
-      const p1Supp = p1ActiveDeck.support || [];
-      const p2Supp = p2ActiveDeck.support || [];
-
-      const supportPool = [
-        ...p1Supp.map(id => ({ ...allCards.find(c => c.id === id), instanceId: `supp_p1_${id}_${Math.random()}` })),
-        ...p2Supp.map(id => ({ ...allCards.find(c => c.id === id), instanceId: `supp_p2_${id}_${Math.random()}` }))
-      ];
+      const p1Deck = buildDeckArray(p1User, allCards, "p1");
+      const p2Deck = buildDeckArray(p2User, allCards, "p2");
+      const supportPool = buildSupportPool(p1User, p2User, allCards);
 
       shuffle(p1Deck);
       shuffle(p2Deck);
 
-      activeBattle = {
+      const initialHand1 = [p1Deck.shift(), p1Deck.shift(), p1Deck.shift()].filter(Boolean);
+      const initialHand2 = [p2Deck.shift(), p2Deck.shift(), p2Deck.shift()].filter(Boolean);
+
+      const battle = {
         id: battleId,
+        phase: "placement", // placement | revealing | combat | roundEnd
+        round: 1,
+        combatLog: "¡Comienza el duelo! Ronda 1 — Roba una carta y coloca tus guerreros.",
+        gameEnded: false,
+        winner: null,
+        supportPool: supportPool,
         player1: {
           username: p1User.username,
           hp: 100,
           energy: 1,
           deck: p1Deck,
-          hand: [],
+          hand: initialHand1,
           board: [null, null, null, null, null],
-          ready: false,
-          hasDrawn: false
+          hasDrawn: false,
+          ready: false
         },
         player2: {
           username: p2User.username,
           hp: 100,
           energy: 1,
           deck: p2Deck,
-          hand: [],
+          hand: initialHand2,
           board: [null, null, null, null, null],
-          ready: false,
-          hasDrawn: false
-        },
-        supportPool: supportPool,
-        round: 1,
-        combatLog: "¡Comienza el duelo! Ronda 1: Roba una carta.",
-        gameEnded: false,
-        winner: null
+          hasDrawn: false,
+          ready: false
+        }
       };
 
-      for (let i = 0; i < 3; i++) {
-        if (activeBattle.player1.deck.length > 0) activeBattle.player1.hand.push(activeBattle.player1.deck.shift());
-        if (activeBattle.player2.deck.length > 0) activeBattle.player2.hand.push(activeBattle.player2.deck.shift());
-      }
-
-      db.ref(`battles/${battleId}`).set(activeBattle, () => {
-        setupBattleFirebaseSync(battleId);
+      db.ref(`battles/${battleId}`).set(battle, () => {
+        activeBattle = battle;
+        subscribeToFirebaseBattle(battleId);
+        setupBattleControls();
+        renderBattle();
       });
     });
   } else {
-    setupBattleFirebaseSync(battleId);
+    // Player 2: esperar a que Firebase tenga la batalla creada
+    waitForBattleAndSubscribe(battleId);
   }
-
-  showScreen("screen-battle");
 }
 
-// --- SINCRONIZACIÓN ONLINE DE LA BATALLA ---
-function setupBattleFirebaseSync(battleId) {
-  battleListenerRef = db.ref(`battles/${battleId}`);
-  battleListenerRef.on("value", (snapshot) => {
-    if (snapshot.exists()) {
-      const data = snapshot.val();
-      if (!data.player1 || !data.player2 || !data.supportPool) return;
+// Construir array de cartas del mazo
+function buildDeckArray(user, allCards, prefix) {
+  const deckIdx = user.activeDeckIdx || 0;
+  const deck = user.decks[deckIdx] || user.decks[0] || { cards: [], support: [] };
+  return (deck.cards || []).map((id, i) => {
+    const card = allCards.find(c => c.id === id);
+    return card ? { ...card, instanceId: `${prefix}_${id}_${i}_${Math.random().toString(36).slice(2)}` } : null;
+  }).filter(Boolean);
+}
 
-      activeBattle = data;
-      renderBattleScreen();
+// Construir pool de apoyo
+function buildSupportPool(p1User, p2User, allCards) {
+  const deckIdx1 = p1User.activeDeckIdx || 0;
+  const deckIdx2 = p2User.activeDeckIdx || 0;
+  const deck1 = p1User.decks[deckIdx1] || p1User.decks[0] || { support: [] };
+  const deck2 = p2User.decks[deckIdx2] || p2User.decks[0] || { support: [] };
+  const supp1 = (deck1.support || []).map(id => { const c = allCards.find(x => x.id === id); return c ? { ...c, instanceId: `supp1_${id}_${Math.random()}` } : null; }).filter(Boolean);
+  const supp2 = (deck2.support || []).map(id => { const c = allCards.find(x => x.id === id); return c ? { ...c, instanceId: `supp2_${id}_${Math.random()}` } : null; }).filter(Boolean);
+  return [...supp1, ...supp2];
+}
 
-      // Si ambos jugadores marcaron listo, el Player 1 corre los cálculos
-      if (localRole === "player1" && activeBattle.player1.ready && activeBattle.player2.ready && !activeBattle.gameEnded && !isProcessingCombatLocal) {
-        isProcessingCombatLocal = true;
-        setTimeout(processCombatPhase, 1200);
-      }
+// Player 2 espera hasta que la sala exista
+function waitForBattleAndSubscribe(battleId) {
+  const ref = db.ref(`battles/${battleId}`);
+  ref.once("value", (snap) => {
+    if (snap.exists() && snap.val().player1 && snap.val().player2) {
+      activeBattle = snap.val();
+      subscribeToFirebaseBattle(battleId);
+      setupBattleControls();
+      renderBattle();
+    } else {
+      setTimeout(() => waitForBattleAndSubscribe(battleId), 800);
     }
   });
-
-  setupDragAndDrop();
-
-  document.getElementById("btn-draw-deck").onclick = () => drawCard("deck");
-  document.getElementById("btn-draw-support").onclick = () => drawCard("support");
-  document.getElementById("btn-end-turn").onclick = endPlacementPhase;
-  document.getElementById("btn-concede").onclick = concedeGame;
 }
 
-// --- ACCIONES DE COMBATE ---
-function drawCard(type) {
+// ==========================================================================
+// FIREBASE LISTENER - Manejo estricto de fases
+// ==========================================================================
+
+function subscribeToFirebaseBattle(battleId) {
+  if (battleListenerRef) battleListenerRef.off();
+  battleListenerRef = db.ref(`battles/${battleId}`);
+
+  battleListenerRef.on("value", (snap) => {
+    if (!snap.exists()) return;
+    const data = snap.val();
+    if (!data || !data.player1 || !data.player2) return;
+
+    const prevPhase = activeBattle ? activeBattle.phase : null;
+    activeBattle = data;
+
+    // Renderizar siempre el estado actual
+    renderBattle();
+
+    // Solo Player1 procesa el combate para evitar duplicados
+    if (localRole === "player1" && !combatProcessed) {
+      if (data.phase === "placement" && data.player1.ready && data.player2.ready && !data.gameEnded) {
+        // Ambos listos → pasar a fase de revelación
+        combatProcessed = true;
+        transitionToRevealPhase();
+      }
+    }
+
+    if (data.gameEnded) {
+      handleGameEnd();
+    }
+  });
+}
+
+// ==========================================================================
+// TRANSICIONES DE FASE (Solo ejecutadas por Player1)
+// ==========================================================================
+
+function transitionToRevealPhase() {
+  // Fase de revelación: mostrar cartas de ambos 1.5s antes de combate
+  activeBattle.phase = "revealing";
+  activeBattle.combatLog = "⚔️ ¡Revelando posiciones! El combate comienza...";
+  db.ref(`battles/${activeBattle.id}`).update({
+    phase: "revealing",
+    combatLog: activeBattle.combatLog
+  }, () => {
+    // Después de 2 segundos, ejecutar el combate
+    setTimeout(executeCombatPhase, 2000);
+  });
+}
+
+function executeCombatPhase() {
   if (!activeBattle) return;
-  const me = localRole === "player1" ? activeBattle.player1 : activeBattle.player2;
-  
+  const p1 = JSON.parse(JSON.stringify(activeBattle.player1));
+  const p2 = JSON.parse(JSON.stringify(activeBattle.player2));
+
+  const logs = [];
+
+  // Aplicar ataques de cada carril
+  for (let i = 0; i < 5; i++) {
+    const c1 = p1.board[i];
+    const c2 = p2.board[i];
+
+    if (c1 && c1.pattern !== "defense" && c1.attack > 0) {
+      applyAttack(c1, i, p2, logs, c1.pattern, true);
+    }
+    if (c2 && c2.pattern !== "defense" && c2.attack > 0) {
+      applyAttack(c2, i, p1, logs, c2.pattern, false);
+    }
+  }
+
+  // Limpiar cartas con vida <= 0
+  for (let i = 0; i < 5; i++) {
+    if (p1.board[i] && p1.board[i].health <= 0) {
+      logs.push(`💀 ${p1.board[i].name} (J1) fue destruida.`);
+      p1.board[i] = null;
+    }
+    if (p2.board[i] && p2.board[i].health <= 0) {
+      logs.push(`💀 ${p2.board[i].name} (J2) fue destruida.`);
+      p2.board[i] = null;
+    }
+  }
+
+  p1.hp = Math.max(0, p1.hp);
+  p2.hp = Math.max(0, p2.hp);
+
+  // Verificar ganador
+  let gameEnded = false;
+  let winner = null;
+  let finalLog = logs.join(" | ");
+
+  if (p1.hp <= 0 && p2.hp <= 0) {
+    gameEnded = true; winner = "Empate";
+    finalLog += " | ¡Es un EMPATE!";
+  } else if (p1.hp <= 0) {
+    gameEnded = true; winner = p2.username;
+    finalLog += ` | 🏆 ¡Victoria para ${p2.username}!`;
+  } else if (p2.hp <= 0) {
+    gameEnded = true; winner = p1.username;
+    finalLog += ` | 🏆 ¡Victoria para ${p1.username}!`;
+  }
+
+  if (gameEnded) {
+    db.ref(`battles/${activeBattle.id}`).update({
+      phase: "combat",
+      player1: p1,
+      player2: p2,
+      combatLog: finalLog || "¡Duelo finalizado!",
+      gameEnded: true,
+      winner: winner
+    });
+  } else {
+    // Avanzar a siguiente ronda
+    const nextRound = activeBattle.round + 1;
+    p1.energy = nextRound;
+    p2.energy = nextRound;
+    p1.ready = false;
+    p2.ready = false;
+    p1.hasDrawn = false;
+    p2.hasDrawn = false;
+
+    // Limpiar tablero de cartas restantes (quedan entre rondas)
+    // Las cartas en tablero permanecen entre rondas (diseño estratégico)
+
+    db.ref(`battles/${activeBattle.id}`).update({
+      phase: "placement",
+      round: nextRound,
+      player1: p1,
+      player2: p2,
+      combatLog: `Ronda ${nextRound} — ${finalLog || "¡Preparate para la siguiente ronda!"}`,
+      gameEnded: false,
+      winner: null
+    }, () => {
+      combatProcessed = false; // Permitir siguiente ronda
+    });
+  }
+}
+
+function applyAttack(card, slotIdx, defender, logs, pattern, isP1Attacker) {
+  const dmg = card.attack;
+  if (!defender.board) defender.board = [null, null, null, null, null];
+
+  if (pattern === "front") {
+    const target = defender.board[slotIdx];
+    if (target) {
+      target.health -= dmg;
+      logs.push(`⚔️ ${card.name} → ${target.name} (-${dmg} ❤️)`);
+    } else {
+      defender.hp -= dmg;
+      logs.push(`💥 ${card.name} → Vida directa (-${dmg})`);
+    }
+  } else if (pattern === "adjacent") {
+    const targets = [slotIdx - 1, slotIdx, slotIdx + 1];
+    let hit = false;
+    targets.forEach(tIdx => {
+      if (tIdx >= 0 && tIdx < 5 && defender.board[tIdx]) {
+        defender.board[tIdx].health -= dmg;
+        logs.push(`↔️ ${card.name} → ${defender.board[tIdx].name} (-${dmg} ❤️)`);
+        hit = true;
+      }
+    });
+    if (!hit) {
+      defender.hp -= dmg;
+      logs.push(`💥 ${card.name} → Vida directa (-${dmg})`);
+    }
+  } else if (pattern === "right") {
+    const tIdx = slotIdx + 1 < 5 ? slotIdx + 1 : slotIdx;
+    const target = defender.board[tIdx];
+    if (target) {
+      target.health -= dmg;
+      logs.push(`➡️ ${card.name} → ${target.name} (-${dmg} ❤️)`);
+    } else {
+      defender.hp -= dmg;
+      logs.push(`💥 ${card.name} → Vida directa (-${dmg})`);
+    }
+  }
+}
+
+// ==========================================================================
+// ACCIONES DEL JUGADOR
+// ==========================================================================
+
+function drawCard(type) {
+  if (!activeBattle || activeBattle.phase !== "placement") return;
+  const me = getMyData();
+
   if (me.hasDrawn) {
     alert("Ya has robado una carta en esta ronda.");
     return;
   }
 
-  if (!me.hand) me.hand = [];
-  if (!me.deck) me.deck = [];
-
   if (type === "deck") {
-    if (me.deck.length > 0) {
-      me.hand.push(me.deck.shift());
-    } else {
-      alert("No te quedan cartas en tu baraja principal.");
+    if (!me.deck || me.deck.length === 0) {
+      alert("Tu baraja está vacía.");
       return;
     }
-  } else if (type === "support") {
-    if (activeBattle.supportPool && activeBattle.supportPool.length > 0) {
-      const idx = Math.floor(Math.random() * activeBattle.supportPool.length);
-      const drawn = { ...activeBattle.supportPool[idx], instanceId: `supp_drawn_${Math.random()}` };
-      me.hand.push(drawn);
-    } else {
+    me.hand.push(me.deck.shift());
+  } else {
+    if (!activeBattle.supportPool || activeBattle.supportPool.length === 0) {
       alert("No quedan cartas de apoyo.");
       return;
     }
-  }
-
-  if (activeBattle.round > 1 && activeBattle.round % 2 === 1 && type === "deck") {
-    if (activeBattle.supportPool && activeBattle.supportPool.length > 0) {
-      const idx = Math.floor(Math.random() * activeBattle.supportPool.length);
-      const autoDrawn = { ...activeBattle.supportPool[idx], instanceId: `supp_auto_${Math.random()}` };
-      me.hand.push(autoDrawn);
-      activeBattle.combatLog = `¡Bono de apoyo! ${me.username} recibe una carta de apoyo adicional.`;
-    }
+    const idx = Math.floor(Math.random() * activeBattle.supportPool.length);
+    me.hand.push({ ...activeBattle.supportPool[idx], instanceId: `drawn_${Math.random()}` });
   }
 
   me.hasDrawn = true;
-  updateBattleState();
+  pushMyUpdate(me);
 }
 
 function playCardToSlot(cardInstanceId, slotIndex) {
-  if (!activeBattle) return;
-  const me = localRole === "player1" ? activeBattle.player1 : activeBattle.player2;
+  if (!activeBattle || activeBattle.phase !== "placement") return;
+  const me = getMyData();
 
-  if (!me.hand) return;
-  const cardIdx = me.hand.findIndex(c => c.instanceId === cardInstanceId);
+  const cardIdx = (me.hand || []).findIndex(c => c && c.instanceId === cardInstanceId);
   if (cardIdx === -1) return;
   const card = me.hand[cardIdx];
 
-  // VALIDACIÓN ESTRICTA DE COSTO
   if (me.energy < card.cost) {
-    alert(`No tienes monedas suficientes para colocar esta carta. Costo: ${card.cost} | Monedas: ${me.energy}`);
+    alert(`Sin monedas suficientes. Costo: 🪙${card.cost} | Tienes: 🪙${me.energy}`);
     return;
   }
 
   if (!me.board) me.board = [null, null, null, null, null];
-  if (me.board[slotIndex] !== null && me.board[slotIndex] !== undefined) {
+  if (me.board[slotIndex]) {
     alert("Este carril ya está ocupado.");
     return;
   }
@@ -199,333 +353,282 @@ function playCardToSlot(cardInstanceId, slotIndex) {
   me.energy -= card.cost;
   me.hand.splice(cardIdx, 1);
   me.board[slotIndex] = card;
+  activeBattle.combatLog = `${me.username} colocó [${card.name}] en el carril ${slotIndex + 1}.`;
 
-  activeBattle.combatLog = `${me.username} colocó a [${card.name}] en el carril ${slotIndex + 1}.`;
-  updateBattleState();
+  pushMyUpdate(me);
 }
 
 function endPlacementPhase() {
-  if (!activeBattle) return;
-  const me = localRole === "player1" ? activeBattle.player1 : activeBattle.player2;
+  if (!activeBattle || activeBattle.phase !== "placement") return;
+  const me = getMyData();
 
   if (!me.hasDrawn) {
     alert("Primero debes robar una carta.");
     return;
   }
+  if (me.ready) return;
 
   me.ready = true;
-  activeBattle.combatLog = `¡${me.username} está listo! Esperando a que el rival finalice su fase...`;
-  
-  updateBattleState();
+  activeBattle.combatLog = `¡${me.username} está listo! Esperando al rival...`;
+  pushMyUpdate(me);
 }
 
 function concedeGame() {
   if (!activeBattle) return;
-  if (confirm("¿Estás seguro de que quieres rendirte?")) {
-    const opponent = localRole === "player1" ? activeBattle.player2 : activeBattle.player1;
-    const me = localRole === "player1" ? activeBattle.player1 : activeBattle.player2;
+  if (!confirm("¿Seguro que quieres rendirte?")) return;
+  const me = getMyData();
+  const opp = getOppData();
 
-    activeBattle.gameEnded = true;
-    activeBattle.winner = opponent.username;
-    activeBattle.combatLog = `¡${me.username} se rindió! Victoria para ${opponent.username}.`;
-    updateBattleState();
-  }
+  db.ref(`battles/${activeBattle.id}`).update({
+    gameEnded: true,
+    winner: opp.username,
+    combatLog: `🏳️ ${me.username} se rindió. ¡Victoria para ${opp.username}!`
+  });
 }
 
-function updateBattleState() {
+// ==========================================================================
+// HELPERS DE DATOS
+// ==========================================================================
+
+function getMyData() {
+  return localRole === "player1" ? activeBattle.player1 : activeBattle.player2;
+}
+
+function getOppData() {
+  return localRole === "player1" ? activeBattle.player2 : activeBattle.player1;
+}
+
+function pushMyUpdate(me) {
   if (!activeBattle) return;
-  db.ref(`battles/${activeBattle.id}`).set(activeBattle);
+  const field = localRole === "player1" ? "player1" : "player2";
+  db.ref(`battles/${activeBattle.id}`).update({
+    [field]: me,
+    combatLog: activeBattle.combatLog
+  });
 }
 
-// --- PROCESAR FASE DE COMBATE (EJECUTADO POR JUGADOR 1 EN LA NUBE) ---
-function processCombatPhase() {
-  if (!activeBattle) return;
-  const p1 = activeBattle.player1;
-  const p2 = activeBattle.player2;
+// ==========================================================================
+// RENDER PRINCIPAL
+// ==========================================================================
 
-  // ROMPER RECURSIÓN
-  p1.ready = false;
-  p2.ready = false;
-
-  let log = `Ronda ${activeBattle.round} - Combate finalizado. \n`;
-
-  if (!p1.board) p1.board = [null, null, null, null, null];
-  if (!p2.board) p2.board = [null, null, null, null, null];
-
-  // Aplicar ataques
-  for (let i = 0; i < 5; i++) {
-    const cardP1 = p1.board[i];
-    const cardP2 = p2.board[i];
-
-    if (cardP1 && cardP1.attack > 0 && cardP1.pattern !== "defense") {
-      executeCardAttack(cardP1, i, p1, p2);
-    }
-    if (cardP2 && cardP2.attack > 0 && cardP2.pattern !== "defense") {
-      executeCardAttack(cardP2, i, p2, p1);
-    }
-  }
-
-  // Limpiar destruidos
-  for (let i = 0; i < 5; i++) {
-    if (p1.board[i] && p1.board[i].health <= 0) p1.board[i] = null;
-    if (p2.board[i] && p2.board[i].health <= 0) p2.board[i] = null;
-  }
-
-  // Comprobar ganador
-  if (p1.hp <= 0 && p2.hp <= 0) {
-    activeBattle.gameEnded = true;
-    activeBattle.winner = "Empate";
-    activeBattle.combatLog = "¡Es un empate! Ambos cayeron en la batalla.";
-  } else if (p1.hp <= 0) {
-    activeBattle.gameEnded = true;
-    activeBattle.winner = p2.username;
-    activeBattle.combatLog = `¡Victoria para ${p2.username}!`;
-  } else if (p2.hp <= 0) {
-    activeBattle.gameEnded = true;
-    activeBattle.winner = p1.username;
-    activeBattle.combatLog = `¡Victoria para ${p1.username}!`;
-  } else {
-    // Siguiente Ronda
-    activeBattle.round++;
-    p1.energy = activeBattle.round;
-    p2.energy = activeBattle.round;
-    p1.ready = false;
-    p2.ready = false;
-    p1.hasDrawn = false;
-    p2.hasDrawn = false;
-    activeBattle.combatLog = `Comienza la ronda ${activeBattle.round}. Monedas restablecidas a ${activeBattle.round}.`;
-  }
-
-  isProcessingCombatLocal = false;
-  updateBattleState();
-}
-
-function executeCardAttack(card, slotIdx, attacker, defender) {
-  const dmg = card.attack;
-  if (!defender.board) defender.board = [null, null, null, null, null];
-
-  if (card.pattern === "front") {
-    const target = defender.board[slotIdx];
-    if (target) target.health -= dmg;
-    else defender.hp = Math.max(0, defender.hp - dmg);
-  } else if (card.pattern === "adjacent") {
-    const targets = [slotIdx - 1, slotIdx, slotIdx + 1];
-    let hit = false;
-    targets.forEach(tIdx => {
-      if (tIdx >= 0 && tIdx < 5) {
-        const target = defender.board[tIdx];
-        if (target) {
-          target.health -= dmg;
-          hit = true;
-        }
-      }
-    });
-    if (!defender.board[slotIdx]) {
-      defender.hp = Math.max(0, defender.hp - dmg);
-    }
-  } else if (card.pattern === "right") {
-    const targetIdx = slotIdx + 1;
-    if (targetIdx < 5) {
-      const target = defender.board[targetIdx];
-      if (target) target.health -= dmg;
-      else defender.hp = Math.max(0, defender.hp - dmg);
-    } else {
-      const target = defender.board[slotIdx];
-      if (target) target.health -= dmg;
-      else defender.hp = Math.max(0, defender.hp - dmg);
-    }
-  }
-}
-
-// --- RENDERIZAR TABLERO ---
-function renderBattleScreen() {
+function renderBattle() {
   if (!activeBattle) return;
 
-  const isP1 = localRole === "player1";
-  const myData = isP1 ? activeBattle.player1 : activeBattle.player2;
-  const oppData = isP1 ? activeBattle.player2 : activeBattle.player1;
+  const myData = getMyData();
+  const oppData = getOppData();
+  const phase = activeBattle.phase;
+  const isRevealing = phase === "revealing" || phase === "combat";
 
+  // Nombres y estadísticas
   document.getElementById("player-name-display").textContent = `${myData.username} (Tú)`;
   document.getElementById("enemy-name-display").textContent = oppData.username;
 
-  document.getElementById("player-health-text").textContent = `${myData.hp}/100`;
-  document.getElementById("player-health-bar").style.width = `${myData.hp}%`;
-  
-  document.getElementById("enemy-health-text").textContent = `${oppData.hp}/100`;
-  document.getElementById("enemy-health-bar").style.width = `${oppData.hp}%`;
+  const myHp = Math.max(0, myData.hp);
+  const oppHp = Math.max(0, oppData.hp);
+  document.getElementById("player-health-text").textContent = `${myHp}/100`;
+  document.getElementById("player-health-bar").style.width = `${myHp}%`;
+  document.getElementById("enemy-health-text").textContent = `${oppHp}/100`;
+  document.getElementById("enemy-health-bar").style.width = `${oppHp}%`;
 
   document.getElementById("player-energy-text").textContent = `${myData.energy}/${activeBattle.round}`;
   document.getElementById("enemy-energy-text").textContent = `${oppData.energy}/${activeBattle.round}`;
 
-  document.getElementById("combat-status-log").textContent = activeBattle.combatLog;
-
-  const drawControls = document.getElementById("draw-phase-controls");
-  if (myData.hasDrawn) {
-    drawControls.style.opacity = "0.5";
-    document.getElementById("btn-draw-deck").disabled = true;
-    document.getElementById("btn-draw-support").disabled = true;
+  // Log de combate
+  const logEl = document.getElementById("combat-status-log");
+  logEl.textContent = activeBattle.combatLog;
+  if (phase === "revealing") {
+    logEl.style.color = "var(--neon-pink)";
+    logEl.classList.add("combat-reveal-anim");
   } else {
-    drawControls.style.opacity = "1";
-    document.getElementById("btn-draw-deck").disabled = false;
-    document.getElementById("btn-draw-support").disabled = false;
+    logEl.style.color = "";
+    logEl.classList.remove("combat-reveal-anim");
   }
 
+  // Controles de robo
+  const drawPhase = document.getElementById("draw-phase-controls");
+  const btnDeck = document.getElementById("btn-draw-deck");
+  const btnSupport = document.getElementById("btn-draw-support");
   const endBtn = document.getElementById("btn-end-turn");
-  if (myData.ready) {
+
+  const isPlacing = phase === "placement";
+
+  if (!isPlacing || myData.hasDrawn) {
+    drawPhase.style.opacity = "0.4";
+    btnDeck.disabled = true;
+    btnSupport.disabled = true;
+  } else {
+    drawPhase.style.opacity = "1";
+    btnDeck.disabled = false;
+    btnSupport.disabled = false;
+  }
+
+  if (myData.ready || !isPlacing) {
     endBtn.disabled = true;
-    endBtn.textContent = "Esperando al rival...";
+    endBtn.textContent = isRevealing ? "⚔️ ¡Combatiendo!" : "Esperando al rival...";
   } else {
     endBtn.disabled = !myData.hasDrawn;
-    endBtn.textContent = "Finalizar Fase de Colocación";
+    endBtn.textContent = "Finalizar Colocación";
   }
 
-  renderPlayerHand(myData.hand || [], myData.energy);
-  renderBoard(document.getElementById("player-board"), myData.board || [null, null, null, null, null], true);
-  renderBoard(document.getElementById("enemy-board"), oppData.board || [null, null, null, null, null], false);
-
-  if (activeBattle.gameEnded) {
-    alert(`¡DUELO FINALIZADO! Ganador: ${activeBattle.winner}`);
-    if (battleListenerRef) {
-      battleListenerRef.off();
-    }
-    db.ref(`battles/${activeBattle.id}`).remove();
-    showScreen("screen-lobby");
-  }
+  // Tableros
+  renderHand(myData.hand || [], myData.energy);
+  renderBoardSlots("player-board", myData.board || [null,null,null,null,null], true, isRevealing);
+  renderBoardSlots("enemy-board", oppData.board || [null,null,null,null,null], false, isRevealing);
 }
 
-// --- RENDERIZAR COMPONENTES ---
-function renderPlayerHand(hand, myEnergy) {
+// ==========================================================================
+// RENDER DE COMPONENTES
+// ==========================================================================
+
+function renderHand(hand, energy) {
   const container = document.getElementById("player-hand");
   container.innerHTML = "";
 
   hand.forEach(card => {
     if (!card) return;
-    const cardDiv = document.createElement("div");
-    cardDiv.className = `game-card rarity-${card.rarity}`;
-    cardDiv.draggable = true;
-    cardDiv.dataset.instanceId = card.instanceId;
+    const el = document.createElement("div");
+    el.className = `game-card rarity-${card.rarity}`;
+    el.draggable = true;
+    el.dataset.instanceId = card.instanceId;
 
-    // Feedback visual si no tienes monedas suficientes
-    if (myEnergy < card.cost) {
-      cardDiv.style.opacity = "0.4";
-      cardDiv.style.cursor = "not-allowed";
-      cardDiv.classList.add("unplayable");
-    } else {
-      cardDiv.style.opacity = "1";
-      cardDiv.style.cursor = "pointer";
+    const canPlay = energy >= card.cost;
+    if (!canPlay) {
+      el.classList.add("unplayable");
+      el.style.cursor = "not-allowed";
     }
 
-    cardDiv.innerHTML = `
-      <div class="card-cost">${card.cost}</div>
-      <div class="card-name" style="color:#fff;">${card.name}</div>
-      <div class="card-illustration">${card.isSupport ? "🛡️" : "⚔️"}</div>
-      <div class="card-desc-tooltip">${card.description || "Carta crossover."}</div>
-      <div class="card-stats">
-        <div class="stat">⚔️ ${card.attack}</div>
-        <div class="stat">❤️ ${card.health}</div>
-      </div>
-    `;
+    el.innerHTML = buildCardHTML(card, energy);
 
-    cardDiv.addEventListener("click", () => {
-      if (myEnergy < card.cost) return; // Bloquear clic
+    el.addEventListener("click", () => {
+      if (!canPlay) { alert(`Sin monedas. Necesitas 🪙${card.cost}, tienes 🪙${energy}`); return; }
       document.querySelectorAll("#player-hand .game-card").forEach(c => c.classList.remove("selected-for-play"));
-      cardDiv.classList.add("selected-for-play");
+      el.classList.add("selected-for-play");
       dragSelectedCardId = card.instanceId;
     });
 
-    cardDiv.addEventListener("dragstart", (e) => {
-      if (myEnergy < card.cost) {
-        e.preventDefault(); // Impedir arrastre si no hay fondos
-        return;
-      }
+    el.addEventListener("dragstart", (e) => {
+      if (!canPlay) { e.preventDefault(); return; }
       e.dataTransfer.setData("text/plain", card.instanceId);
       dragSelectedCardId = card.instanceId;
     });
 
-    container.appendChild(cardDiv);
+    container.appendChild(el);
   });
 }
 
-function renderBoard(boardContainer, slotsArray, isPlayerBoard) {
-  const slotsElements = boardContainer.querySelectorAll(".board-slot");
-  
-  // Niebla de Guerra: Ocultar hasta que ambos terminen su colocación
-  const bothReady = activeBattle.player1.ready && activeBattle.player2.ready;
+function renderBoardSlots(boardId, slots, isMyBoard, revealed) {
+  const board = document.getElementById(boardId);
+  const slotEls = board.querySelectorAll(".board-slot");
 
-  slotsArray.forEach((card, idx) => {
-    const slot = slotsElements[idx];
+  slots.forEach((card, idx) => {
+    const slot = slotEls[idx];
     slot.innerHTML = "";
 
     if (card) {
-      // Si es el tablero enemigo y no han finalizado la fase, se muestra cubierto (Niebla de Guerra)
-      if (!isPlayerBoard && !bothReady) {
-        const coveredCard = document.createElement("div");
-        coveredCard.className = `game-card rarity-common card-back-cyber`;
-        coveredCard.innerHTML = `
-          <div class="card-name" style="color:var(--neon-pink); font-size:0.75rem; margin-top:20px;">❓ OCULTO</div>
-          <div class="card-illustration" style="font-size:1.8rem; margin:15px 0;">🛡️</div>
-          <div style="font-size:0.55rem; color:var(--text-muted);">Carta posicionada</div>
+      if (!isMyBoard && !revealed) {
+        // NIEBLA DE GUERRA: carta oculta
+        const hidden = document.createElement("div");
+        hidden.className = "game-card card-back-cyber";
+        hidden.innerHTML = `
+          <div style="font-size:2rem; margin-bottom:8px;">❓</div>
+          <div style="font-size:0.7rem; color:var(--neon-pink); font-family:var(--font-title);">OCULTO</div>
+          <div style="font-size:0.55rem; color:var(--text-muted); margin-top:6px;">Carta posicionada</div>
         `;
-        slot.appendChild(coveredCard);
+        slot.appendChild(hidden);
       } else {
-        // Revelado normal
-        const cardDiv = document.createElement("div");
-        cardDiv.className = `game-card rarity-${card.rarity}`;
-        cardDiv.innerHTML = `
-          <div class="card-cost">${card.cost}</div>
-          <div class="card-name" style="color:#fff;">${card.name}</div>
-          <div class="card-illustration">${card.isSupport ? "🛡️" : "⚔️"}</div>
-          <div class="card-desc-tooltip">${card.description || "Carta crossover."}</div>
-          <div class="card-stats">
-            <div class="stat">⚔️ ${card.attack}</div>
-            <div class="stat">❤️ ${card.health}</div>
-          </div>
-        `;
-        slot.appendChild(cardDiv);
+        // Carta revelada
+        const el = document.createElement("div");
+        el.className = `game-card rarity-${card.rarity}`;
+        if (revealed && !isMyBoard) el.classList.add("card-reveal-anim");
+        el.innerHTML = buildCardHTML(card);
+        slot.appendChild(el);
       }
     } else {
-      slot.textContent = isPlayerBoard ? "COLOCAR" : "VACÍO";
+      const emptyEl = document.createElement("div");
+      emptyEl.className = "board-slot-label";
+      emptyEl.textContent = isMyBoard ? "COLOCAR" : "VACÍO";
+      slot.appendChild(emptyEl);
     }
   });
 }
 
+function buildCardHTML(card) {
+  const patternMap = { front: "⬆️ FRENTE", adjacent: "↔️ LADOS", right: "➡️ DERECHA", defense: "🛡️ DEFENSA" };
+  const rarityMap = { common: "Común", rare: "Rara", epic: "Épica", legendary: "Legendaria" };
+
+  return `
+    <div class="card-cost">${card.cost}</div>
+    <div class="card-rarity-badge">${rarityMap[card.rarity] || card.rarity}</div>
+    <div class="card-name" style="color:#fff;">${card.name}</div>
+    <div class="card-illustration">${card.isSupport ? "🛡️" : "⚔️"}</div>
+    <div class="card-desc-tooltip">${card.description || "Carta crossover."}</div>
+    <div class="card-stats">
+      <div class="stat">⚔️ ${card.attack}</div>
+      <div class="stat">❤️ ${card.health}</div>
+    </div>
+    <div class="card-footer-info">
+      <span class="pattern-badge">${patternMap[card.pattern] || card.pattern}</span>
+    </div>
+  `;
+}
+
+// ==========================================================================
+// DRAG & DROP Y CONTROLES
+// ==========================================================================
+
+function setupBattleControls() {
+  document.getElementById("btn-draw-deck").onclick = () => drawCard("deck");
+  document.getElementById("btn-draw-support").onclick = () => drawCard("support");
+  document.getElementById("btn-end-turn").onclick = endPlacementPhase;
+  document.getElementById("btn-concede").onclick = concedeGame;
+  setupDragAndDrop();
+}
+
 function setupDragAndDrop() {
   const slots = document.querySelectorAll("#player-board .board-slot");
-
   slots.forEach(slot => {
-    slot.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      slot.classList.add("hovered");
-    });
-
-    slot.addEventListener("dragleave", () => {
-      slot.classList.remove("hovered");
-    });
-
-    slot.addEventListener("drop", (e) => {
+    slot.addEventListener("dragover", e => { e.preventDefault(); slot.classList.add("hovered"); });
+    slot.addEventListener("dragleave", () => slot.classList.remove("hovered"));
+    slot.addEventListener("drop", e => {
       e.preventDefault();
       slot.classList.remove("hovered");
-      const instanceId = e.dataTransfer.getData("text/plain") || dragSelectedCardId;
-      const slotIndex = parseInt(slot.getAttribute("data-slot"));
-
-      if (instanceId) {
-        playCardToSlot(instanceId, slotIndex);
-      }
+      const id = e.dataTransfer.getData("text/plain") || dragSelectedCardId;
+      if (id) playCardToSlot(id, parseInt(slot.getAttribute("data-slot")));
     });
-
     slot.addEventListener("click", () => {
       if (dragSelectedCardId) {
-        const slotIndex = parseInt(slot.getAttribute("data-slot"));
-        playCardToSlot(dragSelectedCardId, slotIndex);
+        playCardToSlot(dragSelectedCardId, parseInt(slot.getAttribute("data-slot")));
         dragSelectedCardId = null;
       }
     });
   });
 }
 
-function shuffle(array) {
-  for (let i = array.length - 1; i > 0; i--) {
+// ==========================================================================
+// FIN DE JUEGO
+// ==========================================================================
+
+function handleGameEnd() {
+  if (!activeBattle) return;
+  const msg = `🏆 DUELO FINALIZADO\nGanador: ${activeBattle.winner || "Empate"}`;
+
+  if (battleListenerRef) battleListenerRef.off();
+
+  setTimeout(() => {
+    alert(msg);
+    db.ref(`battles/${activeBattle.id}`).remove().catch(() => {});
+    activeBattle = null;
+    showScreen("screen-lobby");
+  }, 1500);
+}
+
+// ==========================================================================
+// UTILIDADES
+// ==========================================================================
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]];
+    [arr[i], arr[j]] = [arr[j], arr[i]];
   }
 }
