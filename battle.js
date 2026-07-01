@@ -528,8 +528,8 @@ function drawCard(type) {
         me.deck = reshuffled;
         alert("🔄 ¡Tu baraja se ha reciclado a partir de tus 10 cartas originales!");
       } else {
-        // Fallback de seguridad si no hay originalDeck
-        const allCards = [...DEFAULT_CARDS, ...customCards];
+        // Fallback de seguridad si no hay originalDeck (usa solo DEFAULT_CARDS que sí es global)
+        const allCards = DEFAULT_CARDS || [];
         const prefix = localRole === "player1" ? "p1" : "p2";
         const newCards = [];
         for (let i = 0; i < 5; i++) {
@@ -541,6 +541,7 @@ function drawCard(type) {
     }
     me.hand.push(me.deck.shift());
   } else {
+
 
     // Validar ronda par para cartas de apoyo
     if (activeBattle.round % 2 !== 0) {
