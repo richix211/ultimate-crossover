@@ -441,20 +441,20 @@ function executeCombatCalculationAndNextRound() {
 }
 
 
-function applyAttack(card, slotIdx, defender, logs, pattern, isP1Attacker) {
+function applyAttack(card, slotIdx, defender, logs, pattern) {
   if (!card || card.attack <= 0) return;
   const dmg = card.attack;
-  if (!defender.board) defender.board = [null, null, null, null, null];
-  // Sanitizar board: asegurar que tiene exactamente 5 posiciones
-  while (defender.board.length < 5) defender.board.push(null);
+  
+  // Sanitizar el tablero enemigo garantizando un array de 5 elementos limpio
+  defender.board = normalizeBoard(defender.board);
 
   if (pattern === "front") {
     const target = defender.board[slotIdx];
     if (target) {
-      target.health -= dmg;
+      target.health = Math.max(0, target.health - dmg);
       logs.push(`⚔️ ${card.name} → ${target.name} (-${dmg} ❤️)`);
     } else {
-      defender.hp -= dmg;
+      defender.hp = Math.max(0, defender.hp - dmg);
       logs.push(`💥 ${card.name} → Vida directa (-${dmg})`);
     }
   } else if (pattern === "adjacent") {
@@ -462,27 +462,28 @@ function applyAttack(card, slotIdx, defender, logs, pattern, isP1Attacker) {
     let hit = false;
     targets.forEach(tIdx => {
       if (tIdx >= 0 && tIdx < 5 && defender.board[tIdx]) {
-        defender.board[tIdx].health -= dmg;
+        defender.board[tIdx].health = Math.max(0, defender.board[tIdx].health - dmg);
         logs.push(`↔️ ${card.name} → ${defender.board[tIdx].name} (-${dmg} ❤️)`);
         hit = true;
       }
     });
     if (!hit) {
-      defender.hp -= dmg;
+      defender.hp = Math.max(0, defender.hp - dmg);
       logs.push(`💥 ${card.name} → Vida directa (-${dmg})`);
     }
   } else if (pattern === "right") {
     const tIdx = slotIdx + 1 < 5 ? slotIdx + 1 : slotIdx;
     const target = defender.board[tIdx];
     if (target) {
-      target.health -= dmg;
+      target.health = Math.max(0, target.health - dmg);
       logs.push(`➡️ ${card.name} → ${target.name} (-${dmg} ❤️)`);
     } else {
-      defender.hp -= dmg;
+      defender.hp = Math.max(0, defender.hp - dmg);
       logs.push(`💥 ${card.name} → Vida directa (-${dmg})`);
     }
   }
 }
+
 
 // ==========================================================================
 // ACCIONES DEL JUGADOR
