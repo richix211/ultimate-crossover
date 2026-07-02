@@ -68,11 +68,14 @@ function showScreen(screenId) {
     });
   } else if (screenId === "screen-deck") {
     syncUserData(renderDeckBuilder);
+  } else if (screenId === "screen-album") {
+    syncUserData(renderAlbumBook);
   } else if (screenId === "screen-shop") {
     syncUserData(updateShopUI);
   } else if (screenId === "screen-admin") {
     renderAdminPanel();
   }
+
 }
 
 // --- SINCRONIZAR USUARIO DESDE FIREBASE ---
@@ -244,6 +247,7 @@ function setupLobbyEvents() {
 
   document.getElementById("menu-btn-creator").onclick = () => showScreen("screen-creator");
   document.getElementById("menu-btn-deck").onclick = () => showScreen("screen-deck");
+  document.getElementById("menu-btn-album").onclick = () => showScreen("screen-album");
   document.getElementById("menu-btn-shop").onclick = () => showScreen("screen-shop");
   document.getElementById("btn-admin-console").onclick = () => showScreen("screen-admin");
   
@@ -1421,4 +1425,172 @@ function cancelMatchmaking() {
     alert("Búsqueda de oponente cancelada.");
   });
 }
+
+// --- SISTEMA DEL ÁLBUM / CARDEX PREMIUM ---
+let albumActiveFilter = "all";
+let albumEventsInitialized = false;
+
+function renderAlbumBook() {
+  const grid = document.getElementById("album-book-grid");
+  if (!grid) return;
+  grid.innerHTML = "";
+
+  const allCards = [...defaultCardsList, ...customCards];
+  const collectionList = currentUser.collection || [];
+  const ownedMap = {};
+
+  collectionList.forEach(item => {
+    ownedMap[item.cardId] = (ownedMap[item.cardId] || 0) + item.qty;
+  });
+
+  // Calculamos el porcentaje de completitud (basado en cuántas cartas únicas poseemos de las 13 oficiales)
+  let uniqueOwnedCount = 0;
+  allCards.forEach(c => {
+    // Si es común por defecto y empieza con galaxy_, le damos 5 de stock gratis iniciales
+    const isFreeCommon = (c.rarity === "common" && c.id.startsWith("galaxy_"));
+    const qty = isFreeCommon ? 5 : (ownedMap[c.id] || 0);
+    if (qty > 0) uniqueOwnedCount++;
+  });
+
+  const completionPercent = allCards.length > 0 ? Math.round((uniqueOwnedCount / allCards.length) * 100) : 0;
+  document.getElementById("album-progress-percent").textContent = `${completionPercent}%`;
+  document.getElementById("album-progress-ratio").textContent = `${uniqueOwnedCount} / ${allCards.length} cartas coleccionadas`;
+  
+  // Cantidad de barajas
+  document.getElementById("album-decks-count").textContent = currentUser.decks ? currentUser.decks.length : 1;
+
+  // Filtrar y renderizar cartas
+  allCards.forEach(card => {
+    const isFreeCommon = (card.rarity === "common" && card.id.startsWith("galaxy_"));
+    const qty = isFreeCommon ? 5 : (ownedMap[card.id] || 0);
+    const hasCard = qty > 0;
+
+    // Aplicar filtros
+    if (albumActiveFilter === "owned" && !hasCard) return;
+    if (albumActiveFilter === "missing" && hasCard) return;
+    if (albumActiveFilter === "support" && !card.isSupport) return;
+    if (albumActiveFilter === "legendary" && card.rarity !== "legendary") return;
+
+    const cardDiv = document.createElement("div");
+    cardDiv.className = `game-card rarity-${card.rarity}`;
+    
+    // Si tiene la carta, la mostramos premium y colorida; si no, silueta bloqueada
+    if (hasCard) {
+      applyPremiumCardStyles(cardDiv, card);
+      cardDiv.innerHTML = buildCardHTML(card);
+      
+      // Insignia flotante de la cantidad de copias
+      const qtyBadge = document.createElement("div");
+      qtyBadge.style.cssText = "position:absolute; top:-6px; right:-6px; background:var(--neon-cyan); color:#000; font-family:var(--font-title); font-size:0.75rem; font-weight:900; padding:2px 7px; border-radius:10px; border:1.5px solid #000; z-index:12; box-shadow:0 0 5px var(--neon-cyan);";
+      qtyBadge.textContent = `x${qty}`;
+      cardDiv.appendChild(qtyBadge);
+
+      // Al hacer click, abrir visor interactivo gigante
+      cardDiv.onclick = () => openCardViewer(card);
+    } else {
+      // Silueta bloqueada
+      cardDiv.classList.add("missing-card");
+      if (card.image) {
+        cardDiv.style.backgroundImage = `url('${card.image}')`;
+        cardDiv.style.backgroundSize = "cover";
+      }
+      cardDiv.style.cursor = "default";
+    }
+
+    grid.appendChild(cardDiv);
+  });
+
+  // Inicializar eventos de filtros una sola vez
+  if (!albumEventsInitialized) {
+    albumEventsInitialized = true;
+    document.querySelectorAll(".filter-album-btn").forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll(".filter-album-btn").forEach(b => {
+          b.classList.remove("active");
+          b.classList.add("btn-secondary");
+          b.classList.remove("btn-primary");
+        });
+        btn.classList.add("active");
+        btn.classList.remove("btn-secondary");
+        btn.classList.add("btn-primary");
+
+        albumActiveFilter = btn.getAttribute("data-filter");
+        renderAlbumBook();
+      };
+    });
+
+    // Cerrar visor
+    document.getElementById("btn-close-viewer").onclick = () => {
+      document.getElementById("card-viewer-overlay").classList.add("hidden");
+    };
+  }
+}
+
+function openCardViewer(card) {
+  const overlay = document.getElementById("card-viewer-overlay");
+  const container = document.getElementById("viewer-card-container");
+
+  // Re-inicializar el clon de la carta
+  container.className = `game-card premium-design`;
+  applyPremiumCardStyles(container, card);
+  container.innerHTML = buildCardHTML(card);
+
+  const patternLabels = { front: "Al Frente ⬆️", adjacent: "Adyacentes (Lados) ↔️", right: "Solo Derecha ➡️", defense: "Solo Defensa (Escudo) 🛡️" };
+  const rarityLabels = { common: "Común", rare: "Rara", epic: "Épica", legendary: "Legendaria" };
+
+  // Llenar información de cerca
+  document.getElementById("viewer-card-name").textContent = card.name;
+  document.getElementById("viewer-card-rarity").textContent = rarityLabels[card.rarity] || card.rarity;
+  document.getElementById("viewer-card-rarity").className = `rarity-${card.rarity}`;
+  document.getElementById("viewer-card-pattern").textContent = patternLabels[card.pattern] || card.pattern;
+  document.getElementById("viewer-card-desc").textContent = card.description || "Sin descripción.";
+
+  // Habilidad especial
+  const abilityContainer = document.getElementById("viewer-ability-container");
+  const abilityEl = document.getElementById("viewer-card-ability");
+
+  // Si es épica, legendaria o de apoyo oficial, mostramos la habilidad especial redactada
+  const supportAbilities = {
+    galaxy_nebulosa_curativa: "Al final de cada ronda, cura +2 ❤️ de vida a los guerreros aliados en los carriles adyacentes.",
+    galaxy_generador_plasma: "Otorga +1 ⚔️ de ataque a los guerreros aliados en los carriles adyacentes mientras este generador esté activo."
+  };
+
+  const warriorAbilities = {
+    galaxy_explorador_solar: "Al entrar en juego, si hay un aliado adyacente, este explorador obtiene +1 ❤️ de vida.",
+    galaxy_piloto_cazas: "Al entrar en juego, inflige 1 de daño al guerrero situado en el carril a su derecha.",
+    galaxy_guerrero_meteoritos: "Al morir, explota e inflige 2 de daño directo a la vida del oponente.",
+    galaxy_infiltrado_vacio: "Si no hay ningún oponente enfrente de él al jugarse, obtiene +2 ⚔️ de ataque permanentemente.",
+    galaxy_centinela_titan: "Al entrar en juego, cura +3 ❤️ de vida a tu barra de vida principal.",
+    galaxy_emperador_dragon: "Al entrar en juego, inflige 2 de daño a TODOS los guerreros enemigos en el tablero."
+  };
+
+  const skillText = supportAbilities[card.id] || warriorAbilities[card.id] || null;
+
+  if (skillText) {
+    abilityContainer.style.display = "block";
+    abilityEl.textContent = skillText;
+  } else {
+    abilityContainer.style.display = "none";
+  }
+
+  // Animación interactiva 3D con giroscopio del mouse
+  overlay.onmousemove = (e) => {
+    const rect = container.getBoundingClientRect();
+    const x = e.clientX - rect.left - rect.width / 2;
+    const y = e.clientY - rect.top - rect.height / 2;
+    
+    // Calcular rotaciones máximas de 25 grados
+    const rotateX = -(y / (rect.height / 2)) * 20;
+    const rotateY = (x / (rect.width / 2)) * 20;
+
+    container.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.05)`;
+  };
+
+  overlay.onmouseleave = () => {
+    container.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1)`;
+  };
+
+  overlay.classList.remove("hidden");
+}
+
 

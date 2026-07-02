@@ -124,14 +124,17 @@
             <h2>JUGAR COMBATE</h2>
             <p>Emparejamiento real en pantalla o salas de duelo</p>
           </button>
-          <div class="submenu-cards">
             <button id="menu-btn-creator" class="menu-card creator-card">
               <h3>✨ Creador de Cartas</h3>
               <p>Diseña luchadores personalizados</p>
             </button>
             <button id="menu-btn-deck" class="menu-card deck-card">
-              <h3>🎴 Álbum y Barajas</h3>
+              <h3>🎴 Armar Barajas</h3>
               <p>Crea tu mazo de 10 cartas con copias</p>
+            </button>
+            <button id="menu-btn-album" class="menu-card" style="background: linear-gradient(135deg, #6a1b9a 0%, #4a148c 100%); border: 1px solid rgba(255,255,255,0.1); color:#fff; text-align:left; padding:15px; border-radius:12px; cursor:pointer; transition:all 0.3s ease;">
+              <h3 style="font-family:var(--font-title); font-size:1rem; margin-bottom:4px;">📖 Colección & Cardex</h3>
+              <p style="font-size:0.75rem; color:var(--text-muted); margin:0;">Visualiza tus cartas y completa el álbum</p>
             </button>
             <button id="menu-btn-shop" class="menu-card shop-card">
               <h3>🛒 Tienda de Sobres</h3>
@@ -139,6 +142,7 @@
             </button>
           </div>
         </div>
+
 
         <!-- Columna Social (Amigos y Duelos) -->
         <div class="glass-card social-column">
@@ -615,8 +619,92 @@
   </div>
 
 
+  <!-- PANTALLA 9: LIBRO DE COLECCIÓN (CARDEX) -->
+  <div id="screen-album" class="screen">
+    <div class="back-nav" style="padding:20px; max-width:1200px; margin:0 auto;">
+      <button class="btn btn-secondary btn-back-lobby">⬅️ Volver al Lobby</button>
+    </div>
+
+    <div class="game-modes-container" style="max-width:1200px; margin:0 auto; padding:0 20px 40px 20px;">
+      <h1 class="screen-title" style="text-shadow:0 0 10px var(--neon-cyan);">📖 Álbum de Colección Galaxy</h1>
+      <p style="color:var(--text-muted); text-align:center; margin-top:-10px; margin-bottom:30px;">
+        Haz clic en cualquier carta que poseas para ver sus detalles en pantalla completa.
+      </p>
+
+      <!-- Panel de Estadísticas del Libro -->
+      <div class="glass-card" style="display:flex; flex-wrap:wrap; justify-content:space-around; align-items:center; gap:20px; padding:20px; margin-bottom:30px; text-align:center;">
+        <div>
+          <div style="font-size:0.85rem; color:var(--text-muted); text-transform:uppercase;">Completado de Expansión</div>
+          <div id="album-progress-percent" style="font-family:var(--font-title); font-size:2.2rem; color:var(--neon-gold); text-shadow:0 0 10px rgba(255,215,0,0.3);">0%</div>
+          <div id="album-progress-ratio" style="font-size:0.8rem; color:var(--text-muted);">0 / 13 cartas descubiertas</div>
+        </div>
+        <div style="width:2px; height:60px; background:rgba(255,255,255,0.08); display:none; @media (min-width: 600px) { display:block; }"></div>
+        <div>
+          <div style="font-size:0.85rem; color:var(--text-muted); text-transform:uppercase;">Barajas Creadas</div>
+          <div id="album-decks-count" style="font-family:var(--font-title); font-size:2.2rem; color:var(--neon-cyan);">1</div>
+          <div style="font-size:0.8rem; color:var(--text-muted);">Total de barajas activas</div>
+        </div>
+      </div>
+
+      <!-- Filtros Rápidos -->
+      <div style="display:flex; justify-content:center; gap:10px; flex-wrap:wrap; margin-bottom:30px;">
+        <button class="btn btn-primary filter-album-btn active" data-filter="all">Todas</button>
+        <button class="btn btn-secondary filter-album-btn" data-filter="owned">Obtenidas</button>
+        <button class="btn btn-secondary filter-album-btn" data-filter="missing">Faltantes</button>
+        <button class="btn btn-secondary filter-album-btn" data-filter="support">Apoyo</button>
+        <button class="btn btn-secondary filter-album-btn" data-filter="legendary">Legendarias</button>
+      </div>
+
+      <!-- Cuadrícula de Cartas del Libro -->
+      <div id="album-book-grid" class="revealed-cards-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:24px; width:100%;">
+        <!-- Cartas inyectadas dinámicamente por JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- VISOR DE CARTA EN DETALLE (OVERLAY 3D GIGANTE) -->
+  <div id="card-viewer-overlay" class="overlay hidden" style="z-index:9999;">
+    <div style="position:absolute; top:20px; right:20px;">
+      <button id="btn-close-viewer" class="btn btn-danger" style="font-size:1.2rem; padding:8px 16px; border-radius:50%;">✕</button>
+    </div>
+
+    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:30px; height:100%; width:100%; max-width:600px; margin:0 auto; padding:20px;">
+      <!-- Tarjeta Ampliada 3D -->
+      <div id="viewer-card-container" class="game-card premium-design" style="width:220px; height:320px; box-shadow:0 15px 50px rgba(0,0,0,0.8), 0 0 30px rgba(0, 242, 254, 0.4); transform-style:preserve-3d; transition:transform 0.1s ease;">
+        <!-- El contenido se copia dinámicamente -->
+      </div>
+
+      <!-- Detalles del Lore / Habilidad abajo -->
+      <div class="glass-card" style="padding:24px; text-align:left; width:100%; max-width:450px;">
+        <h2 id="viewer-card-name" style="font-family:var(--font-title); font-size:1.5rem; color:#fff; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:8px;">Nombre de la Carta</h2>
+        
+        <div style="margin-bottom:12px;">
+          <strong style="color:var(--neon-gold); font-size:0.85rem; text-transform:uppercase;">Rareza: </strong>
+          <span id="viewer-card-rarity" style="font-weight:700;">Común</span>
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <strong style="color:var(--neon-cyan); font-size:0.85rem; text-transform:uppercase;">Patrón de Ataque: </strong>
+          <span id="viewer-card-pattern" style="font-weight:700;">Al Frente ⬆️</span>
+        </div>
+
+        <div id="viewer-ability-container" style="margin-bottom:12px;">
+          <strong style="color:var(--neon-pink); font-size:0.85rem; text-transform:uppercase;">Efecto Especial: </strong>
+          <p id="viewer-card-ability" style="font-size:0.9rem; color:#fff; line-height:1.4; margin:4px 0 0 0;">Descripción de la habilidad...</p>
+        </div>
+
+        <div>
+          <strong style="color:var(--text-muted); font-size:0.85rem; text-transform:uppercase;">Ambientación: </strong>
+          <p id="viewer-card-desc" style="font-size:0.85rem; color:var(--text-muted); font-style:italic; line-height:1.4; margin:4px 0 0 0;">Historia o lore...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
   <!-- Cargar los Scripts JS al final -->
   <script src="cards_db.js"></script>
+
   <script src="battle.js"></script>
   <script src="app.js"></script>
 </body>
