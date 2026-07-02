@@ -657,46 +657,45 @@
       </div>
 
       <!-- Cuadrícula de Cartas del Libro -->
-      <div id="album-book-grid" class="revealed-cards-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:24px; width:100%;">
+      <div id="album-book-grid" class="revealed-cards-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:28px; width:100%;">
         <!-- Cartas inyectadas dinámicamente por JS -->
       </div>
     </div>
   </div>
 
   <!-- VISOR DE CARTA EN DETALLE (OVERLAY 3D GIGANTE) -->
-  <div id="card-viewer-overlay" class="overlay hidden" style="z-index:9999;">
-    <div style="position:absolute; top:20px; right:20px;">
-      <button id="btn-close-viewer" class="btn btn-danger" style="font-size:1.2rem; padding:8px 16px; border-radius:50%;">✕</button>
-    </div>
+  <div id="card-viewer-overlay" class="overlay hidden" style="z-index:9999; overflow-y:auto;">
+    <button id="btn-close-viewer" class="btn btn-danger" style="position:fixed; top:20px; right:20px; font-size:1.2rem; padding:8px 16px; border-radius:50%; z-index:10000;">✕</button>
 
-    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:30px; height:100%; width:100%; max-width:600px; margin:0 auto; padding:20px;">
+    <div style="display:flex; flex-direction:column; align-items:center; gap:30px; width:100%; max-width:500px; margin:0 auto; padding:40px 20px;">
       <!-- Tarjeta Ampliada 3D -->
-      <div id="viewer-card-container" class="game-card premium-design" style="width:220px; height:320px; box-shadow:0 15px 50px rgba(0,0,0,0.8), 0 0 30px rgba(0, 242, 254, 0.4); transform-style:preserve-3d; transition:transform 0.1s ease;">
+      <div id="viewer-card-container" class="game-card premium-design" style="width:280px; height:400px; flex-shrink:0; box-shadow:0 15px 50px rgba(0,0,0,0.8), 0 0 30px rgba(0, 242, 254, 0.4); transform-style:preserve-3d; transition:transform 0.1s ease;">
         <!-- El contenido se copia dinámicamente -->
       </div>
 
       <!-- Detalles del Lore / Habilidad abajo -->
-      <div class="glass-card" style="padding:24px; text-align:left; width:100%; max-width:450px;">
+      <div class="glass-card" style="padding:24px; text-align:left; width:100%;">
         <h2 id="viewer-card-name" style="font-family:var(--font-title); font-size:1.5rem; color:#fff; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:8px;">Nombre de la Carta</h2>
         
-        <div style="margin-bottom:12px;">
-          <strong style="color:var(--neon-gold); font-size:0.85rem; text-transform:uppercase;">Rareza: </strong>
-          <span id="viewer-card-rarity" style="font-weight:700;">Común</span>
+        <div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:12px;">
+          <div>
+            <strong style="color:var(--neon-gold); font-size:0.8rem; text-transform:uppercase;">Rareza</strong><br>
+            <span id="viewer-card-rarity" style="font-weight:700; font-size:1rem;">Común</span>
+          </div>
+          <div>
+            <strong style="color:var(--neon-cyan); font-size:0.8rem; text-transform:uppercase;">Patrón de Ataque</strong><br>
+            <span id="viewer-card-pattern" style="font-weight:700; font-size:1rem;">Al Frente ⬆️</span>
+          </div>
         </div>
 
-        <div style="margin-bottom:12px;">
-          <strong style="color:var(--neon-cyan); font-size:0.85rem; text-transform:uppercase;">Patrón de Ataque: </strong>
-          <span id="viewer-card-pattern" style="font-weight:700;">Al Frente ⬆️</span>
+        <div id="viewer-ability-container" style="margin-bottom:12px; padding:12px; background:rgba(255,0,100,0.08); border-left:3px solid var(--neon-pink); border-radius:0 8px 8px 0;">
+          <strong style="color:var(--neon-pink); font-size:0.8rem; text-transform:uppercase;">⚡ Efecto Especial</strong>
+          <p id="viewer-card-ability" style="font-size:0.9rem; color:#fff; line-height:1.5; margin:6px 0 0 0;">Descripción de la habilidad...</p>
         </div>
 
-        <div id="viewer-ability-container" style="margin-bottom:12px;">
-          <strong style="color:var(--neon-pink); font-size:0.85rem; text-transform:uppercase;">Efecto Especial: </strong>
-          <p id="viewer-card-ability" style="font-size:0.9rem; color:#fff; line-height:1.4; margin:4px 0 0 0;">Descripción de la habilidad...</p>
-        </div>
-
-        <div>
-          <strong style="color:var(--text-muted); font-size:0.85rem; text-transform:uppercase;">Ambientación: </strong>
-          <p id="viewer-card-desc" style="font-size:0.85rem; color:var(--text-muted); font-style:italic; line-height:1.4; margin:4px 0 0 0;">Historia o lore...</p>
+        <div style="padding-top:8px; border-top:1px solid rgba(255,255,255,0.06);">
+          <strong style="color:var(--text-muted); font-size:0.8rem; text-transform:uppercase;">📜 Ambientación</strong>
+          <p id="viewer-card-desc" style="font-size:0.85rem; color:var(--text-muted); font-style:italic; line-height:1.5; margin:6px 0 0 0;">Historia o lore...</p>
         </div>
       </div>
     </div>

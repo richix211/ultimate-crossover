@@ -1601,6 +1601,37 @@ body {
   transform: perspective(1000px);
 }
 
+/* Pantalla del Álbum: ocupa toda la ventana con scroll propio */
+#screen-album {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow-y: auto;
+  background: var(--bg-dark);
+  z-index: 500;
+  padding-top: 10px;
+}
+
+/* Tarjeta ampliada en el visor: escalar stats para carta grande */
+#viewer-card-container .stat-overlay {
+  font-size: 1.1rem !important;
+}
+#viewer-card-container .card-name-overlay {
+  font-size: 0.85rem !important;
+}
+#viewer-card-container .card-desc-overlay {
+  font-size: 0.65rem !important;
+}
+
+/* Tarjetas del grid del álbum más grandes */
+#album-book-grid .game-card {
+  width: 160px;
+  height: 230px;
+}
+
+
 
 
 
