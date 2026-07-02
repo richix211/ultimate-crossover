@@ -89,6 +89,31 @@ function syncUserData(callback) {
         currentUser.activeDeckIdx = 0;
       }
       activeDeckIndex = currentUser.activeDeckIdx || 0;
+
+      // --- MIGRACIÓN AUTOMÁTICA GALAXY ---
+      if (!currentUser.galaxy_migration_v2) {
+        currentUser.galaxy_migration_v2 = true;
+        currentUser.collection = [];
+        currentUser.decks = [{ name: "Baraja Inicial", cards: [], support: [] }];
+        currentUser.activeDeckIdx = 0;
+        activeDeckIndex = 0;
+        
+        // Compensación: 10 sobres Galaxy
+        currentUser.packs = { base: 10 };
+
+        // Guardar cambios en Firebase
+        db.ref(`users/${currentUser.username}`).update({
+          galaxy_migration_v2: true,
+          collection: [],
+          decks: currentUser.decks,
+          activeDeckIdx: 0,
+          packs: currentUser.packs
+        }, () => {
+          alert(`🌌 ¡La temporada GALAXY ha comenzado!\n\nTu colección anterior ha sido reiniciada. Hemos añadido 10 SOBRES GALAXY gratis a tu inventario como compensación. ¡Corre a la tienda a abrirlos!`);
+          if (callback) callback();
+        });
+        return; // Detenemos aquí ya que la actualización asíncrona llamará al callback
+      }
     }
     if (callback) callback();
   });
@@ -713,20 +738,21 @@ function renderDeckBuilder() {
 
     const cardDiv = document.createElement("div");
     cardDiv.className = `game-card rarity-${card.rarity}`;
-    cardDiv.innerHTML = `
-      <div class="card-cost">${card.cost}</div>
-      <div class="card-rarity-badge">${getRarityStyle(card.rarity).text} (x${qty})</div>
-      <div class="card-name" style="color:#fff;">${card.name}</div>
-      <div class="card-illustration">${card.isSupport ? "🛡️" : "⚔️"}</div>
-      <div class="card-desc-tooltip">${card.description || "Carta crossover."}</div>
-      <div class="card-stats">
-        <div class="stat">⚔️ ${card.attack}</div>
-        <div class="stat">❤️ ${card.health}</div>
-      </div>
-      <div class="card-footer-info">
-        <span class="pattern-badge">${getPatternIcon(card.pattern)} ${card.pattern.toUpperCase()}</span>
-      </div>
-    `;
+    applyPremiumCardStyles(cardDiv, card);
+    cardDiv.innerHTML = buildCardHTML(card);
+    
+    // Si es premium, podemos inyectarle el indicador de cantidad en una esquina flotante
+    if (card.image) {
+      const qtyBadge = document.createElement("div");
+      qtyBadge.style.cssText = "position:absolute; top:-6px; left:-6px; background:#ffd700; color:#000; font-family:var(--font-title); font-size:0.7rem; font-weight:900; padding:2px 6px; border-radius:10px; border:1.5px solid #000; z-index:12;";
+      qtyBadge.textContent = `x${qty}`;
+      cardDiv.appendChild(qtyBadge);
+    } else {
+      // En tarjetas normales, modificar el rarity badge para incluir la cantidad
+      const badge = cardDiv.querySelector(".card-rarity-badge");
+      if (badge) badge.textContent = `${getRarityStyle(card.rarity).text} (x${qty})`;
+    }
+
 
     cardDiv.onclick = () => {
       const activeDeck = currentUser.decks[activeDeckIndex];
@@ -1096,20 +1122,9 @@ function generateBoosterCards(packId) {
     const label = rarityLabels[card.rarity] || "Común";
     const patternMap = { front: "⬆️ FRENTE", adjacent: "↔️ LADOS", right: "➡️ DERECHA", defense: "🛡️ DEFENSA" };
 
-    cardDiv.innerHTML = `
-      <div class="card-cost">${card.cost}</div>
-      <div class="card-rarity-badge">${label}</div>
-      <div class="card-name" style="color:#fff;">${card.name}</div>
-      <div class="card-illustration">${card.isSupport ? "🛡️" : "⚔️"}</div>
-      <div class="card-desc-tooltip">${card.description || "Carta crossover."}</div>
-      <div class="card-stats">
-        <div class="stat">⚔️ ${card.attack}</div>
-        <div class="stat">❤️ ${card.health}</div>
-      </div>
-      <div class="card-footer-info">
-        <span class="pattern-badge">${patternMap[card.pattern] || card.pattern}</span>
-      </div>
-    `;
+    applyPremiumCardStyles(cardDiv, card);
+    cardDiv.innerHTML = buildCardHTML(card);
+
 
     revealedGrid.appendChild(cardDiv);
 

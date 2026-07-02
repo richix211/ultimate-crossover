@@ -1,165 +1,170 @@
-// Base de datos de cartas iniciales por defecto (Cartas Base)
-// Estas cartas estarán disponibles para salir en los sobres y se mezclarán con las cartas creadas por el usuario.
+// Base de datos de cartas iniciales por defecto (Cartas Base de la Expansión Galaxy)
+// Únicamente contiene las 13 cartas oficiales de la colección Galaxy.
 
 const DEFAULT_CARDS = [
-  // --- COMUNES (0 o 1 Moneda) ---
+  // --- APOYOS (2 Cartas) ---
   {
-    id: "base_soldado",
-    name: "Soldado Recluta",
+    id: "galaxy_nebulosa_curativa",
+    name: "Nebulosa Curativa",
+    cost: 1,
+    attack: 0,
+    health: 5,
+    pattern: "defense",
+    rarity: "common",
+    description: "Al final de cada ronda, cura +2 de vida a los aliados adyacentes.",
+    isSupport: true,
+    image: "Nebulosacurativa.png"
+  },
+  {
+    id: "galaxy_generador_plasma",
+    name: "Generador de Plasma",
+    cost: 2,
+    attack: 0,
+    health: 6,
+    pattern: "defense",
+    rarity: "rare",
+    description: "Otorga +1 de ataque a los aliados adyacentes mientras esté en el tablero.",
+    isSupport: true,
+    image: "Generadordeplasma.png"
+  },
+
+  // --- GUERREROS COSTE 1 (2 Cartas) ---
+  {
+    id: "galaxy_cadete_estelar",
+    name: "Cadete Estelar",
     cost: 1,
     attack: 2,
     health: 4,
-    pattern: "front", // Ataca directo al frente
+    pattern: "front",
     rarity: "common",
-    description: "Un luchador disciplinado que ataca de frente.",
-    isSupport: false
+    description: "Luchador ágil y barato ideal para reclamar carriles en las primeras rondas.",
+    isSupport: false,
+    image: "CadeteEstelar.png"
   },
   {
-    id: "base_escudo",
-    name: "Escudero Guardián",
-    cost: 1,
-    attack: 0,
-    health: 7,
-    pattern: "defense", // Solo defiende (no ataca)
-    rarity: "common",
-    description: "Tiene gran defensa pero no realiza ataques.",
-    isSupport: false
-  },
-  {
-    id: "base_pocion_vida",
-    name: "Poción Menor",
-    cost: 0,
-    attack: 0,
-    health: 2,
-    pattern: "defense",
-    rarity: "common",
-    description: "Carta de apoyo básica. Ofrece algo de bloqueo.",
-    isSupport: true // Carta de apoyo compartida
-  },
-  {
-    id: "base_refuerzo",
-    name: "Milicia de Apoyo",
+    id: "galaxy_droide_explorador",
+    name: "Droide Explorador",
     cost: 1,
     attack: 1,
-    health: 2,
+    health: 6,
     pattern: "front",
     rarity: "common",
-    description: "Carta de apoyo barata que ataca de frente.",
-    isSupport: true
+    description: "Una unidad de reconocimiento barata programada para soportar castigos iniciales.",
+    isSupport: false,
+    image: "DroideExplorador.png"
   },
 
-  // --- RARAS (1 o 2 Monedas) ---
+  // --- GUERREROS COSTE 2 (4 Cartas) ---
   {
-    id: "base_espadachin",
-    name: "Espadachín Ágil",
+    id: "galaxy_defensor_andromeda",
+    name: "Defensor de Andrómeda",
+    cost: 2,
+    attack: 2,
+    health: 8,
+    pattern: "front",
+    rarity: "common",
+    description: "Su escudo de titanio galáctico absorbe los primeros choques en el frente.",
+    isSupport: false,
+    image: "Defensordeandromeda.png"
+  },
+  {
+    id: "galaxy_cazador_pulsars",
+    name: "Cazador de Pulsars",
+    cost: 2,
+    attack: 3,
+    health: 6,
+    pattern: "front",
+    rarity: "common",
+    description: "Ataca con rifles de impulsos cargados de radiación cósmica.",
+    isSupport: false,
+    image: "Cazadordepulsars.png"
+  },
+  {
+    id: "galaxy_explorador_solar",
+    name: "Explorador Solar",
+    cost: 2,
+    attack: 3,
+    health: 5,
+    pattern: "adjacent",
+    rarity: "rare",
+    description: "Al entrar en juego, si hay un aliado adyacente, este explorador obtiene +1 de vida.",
+    isSupport: false,
+    image: "ExploradorSolar.png"
+  },
+  {
+    id: "galaxy_piloto_cazas",
+    name: "Piloto de Cazas",
     cost: 2,
     attack: 4,
-    health: 3,
-    pattern: "front",
+    health: 4,
+    pattern: "right",
     rarity: "rare",
-    description: "Rápido y letal, excelente atacante frontal.",
-    isSupport: false
-  },
-  {
-    id: "base_arquero",
-    name: "Arquero Flanqueador",
-    cost: 2,
-    attack: 3,
-    health: 3,
-    pattern: "adjacent", // Ataca a los lados
-    rarity: "rare",
-    description: "Ataca a los lados de la carta de enfrente.",
-    isSupport: false
-  },
-  {
-    id: "base_escudo_pesado",
-    name: "Barrera de Energía",
-    cost: 2,
-    attack: 0,
-    health: 12,
-    pattern: "defense",
-    rarity: "rare",
-    description: "Excelente carta de apoyo defensiva.",
-    isSupport: true
+    description: "Al entrar en juego, inflige 1 de daño al guerrero situado en el carril a su derecha.",
+    isSupport: false,
+    image: "Pilotodecazas.png"
   },
 
-  // --- ÉPICAS (2 o 3 Monedas) ---
+  // --- GUERREROS COSTE 3 (3 Cartas) ---
   {
-    id: "base_golem",
-    name: "Golem de Piedra",
+    id: "galaxy_guerrero_meteoritos",
+    name: "Guerrero de Meteoritos",
     cost: 3,
-    attack: 3,
-    health: 12,
+    attack: 4,
+    health: 9,
     pattern: "front",
-    rarity: "epic",
-    description: "Un coloso con gran cantidad de vida.",
-    isSupport: false
+    rarity: "rare",
+    description: "Al morir, inflige 2 de daño al oponente que lo destruyó.",
+    isSupport: false,
+    image: "Guerrerodemeteoritos.png"
   },
   {
-    id: "base_asesino",
-    name: "Asesino de la Sombra",
+    id: "galaxy_bestia_agujero",
+    name: "Bestia del Agujero Negro",
     cost: 3,
     attack: 5,
-    health: 4,
-    pattern: "right", // Ataca específicamente al lado derecho
+    health: 7,
+    pattern: "adjacent",
+    rarity: "rare",
+    description: "Una aberración gravitacional que desgarra a los enemigos adyacentes.",
+    isSupport: false,
+    image: "Bestiadelagujeronegro.png"
+  },
+  {
+    id: "galaxy_infiltrado_vacio",
+    name: "Infiltrado del Vacío",
+    cost: 3,
+    attack: 4,
+    health: 8,
+    pattern: "right",
     rarity: "epic",
-    description: "Flanquea atacando únicamente hacia la derecha.",
-    isSupport: false
+    description: "Si no hay ningún oponente enfrente de él al jugarse, obtiene +2 de ataque permanentemente.",
+    isSupport: false,
+    image: "Infiltradodelvacio.png"
   },
 
-  // --- LEGENDARIAS (3 o 4 Monedas) ---
+  // --- GUERREROS COSTE 4+ (2 Cartas) ---
   {
-    id: "base_dragon",
-    name: "Dragón de Plasma",
+    id: "galaxy_centinela_titan",
+    name: "Centinela Titán",
     cost: 4,
-    attack: 6,
-    health: 15,
+    attack: 4,
+    health: 14,
+    pattern: "front",
+    rarity: "epic",
+    description: "Al entrar en juego, cura +3 de vida a tu barra de vida principal.",
+    isSupport: false,
+    image: "Centinelatitan.png"
+  },
+  {
+    id: "galaxy_emperador_dragon",
+    name: "Emperador Dragón Cósmico",
+    cost: 5,
+    attack: 8,
+    health: 12,
     pattern: "adjacent",
     rarity: "legendary",
-    description: "Devasta al frente y a los lados. ¡Un verdadero titán!",
-    isSupport: false
-  },
-  {
-    id: "base_avatar",
-    name: "Avatar del Crossover",
-    cost: 4,
-    attack: 8,
-    health: 10,
-    pattern: "front",
-    rarity: "legendary",
-    description: "Su poder de ataque frontal es incomparable.",
-    isSupport: false
+    description: "Al entrar en juego, inflige 2 de daño a TODOS los guerreros enemigos en el tablero.",
+    isSupport: false,
+    image: "EmperadorDragonCosmico.png"
   }
 ];
-
-// Retorna los estilos visuales de las cartas según su rareza
-function getRarityStyle(rarity) {
-  switch (rarity) {
-    case "common":
-      return { border: "rgba(255, 255, 255, 0.2)", shadow: "rgba(255, 255, 255, 0.1)", text: "Común", color: "#8a92a6" };
-    case "rare":
-      return { border: "rgba(0, 168, 255, 0.6)", shadow: "0 0 10px rgba(0, 168, 255, 0.4)", text: "Rara", color: "#00a8ff" };
-    case "epic":
-      return { border: "rgba(156, 39, 176, 0.6)", shadow: "0 0 12px rgba(156, 39, 176, 0.5)", text: "Épica", color: "#9c27b0" };
-    case "legendary":
-      return { border: "rgba(255, 215, 0, 0.8)", shadow: "0 0 20px rgba(255, 215, 0, 0.6)", text: "Legendaria", color: "#ffd700" };
-    default:
-      return { border: "rgba(255, 255, 255, 0.2)", shadow: "none", text: "Desconocida", color: "#ffffff" };
-  }
-}
-
-// Retorna el icono representativo del patrón de ataque
-function getPatternIcon(pattern) {
-  switch (pattern) {
-    case "front":
-      return "⬆️";
-    case "adjacent":
-      return "↔️";
-    case "right":
-      return "➡️";
-    case "defense":
-      return "🛡️";
-    default:
-      return "⚔️";
-  }
-}

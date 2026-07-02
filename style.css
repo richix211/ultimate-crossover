@@ -607,6 +607,65 @@ body {
   transition: var(--transition);
 }
 
+/* --- ESTILO PREMIUM PARA CARTAS CON DISEÑO DE IMAGEN COMPLETO --- */
+.game-card.premium-design {
+  padding: 0 !important;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+
+/* Ocultar elementos por defecto en el diseño premium */
+.game-card.premium-design .card-rarity-badge,
+.game-card.premium-design .card-name,
+.game-card.premium-design .card-illustration,
+.game-card.premium-design .card-footer-info {
+  display: none !important;
+}
+
+/* Superposición exacta de los números sobre los iconos en la imagen de la carta */
+.game-card.premium-design .premium-cost {
+  position: absolute;
+  top: 110px;
+  right: 21px;
+  font-family: var(--font-title);
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: #2b1d0c; /* Color oscuro similar al de tu diseño */
+  text-shadow: 0px 1px 0px rgba(255,255,255,0.4);
+  pointer-events: none;
+  z-index: 10;
+}
+
+.game-card.premium-design .premium-attack {
+  position: absolute;
+  top: 110px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-title);
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: #2b1d0c;
+  text-shadow: 0px 1px 0px rgba(255,255,255,0.4);
+  pointer-events: none;
+  z-index: 10;
+}
+
+.game-card.premium-design .premium-health {
+  position: absolute;
+  top: 110px;
+  left: 21px;
+  font-family: var(--font-title);
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: #2b1d0c;
+  text-shadow: 0px 1px 0px rgba(255,255,255,0.4);
+  pointer-events: none;
+  z-index: 10;
+}
+
+
 .game-card:hover {
   transform: translateY(-8px) scale(1.02);
 }

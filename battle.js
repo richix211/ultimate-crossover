@@ -251,26 +251,43 @@ function runVisualCombatSequenced() {
 
     // Ataque del Jugador 1
     if (c1 && c1.pattern !== "defense" && c1.attack > 0) {
+      const bonus = getBonusAttackForSlot(p1.board, i);
       animationsQueue.push({
         attackerRole: "player1",
         slotIdx: i,
         cardName: c1.name,
-        dmg: c1.attack,
+        dmg: c1.attack + bonus,
         pattern: c1.pattern
       });
     }
 
     // Ataque del Jugador 2
     if (c2 && c2.pattern !== "defense" && c2.attack > 0) {
+      const bonus = getBonusAttackForSlot(p2.board, i);
       animationsQueue.push({
         attackerRole: "player2",
         slotIdx: i,
         cardName: c2.name,
-        dmg: c2.attack,
+        dmg: c2.attack + bonus,
         pattern: c2.pattern
       });
     }
   }
+
+  function getBonusAttackForSlot(board, slotIdx) {
+    let bonus = 0;
+    const adj = [slotIdx - 1, slotIdx + 1];
+    adj.forEach(idx => {
+      if (idx >= 0 && idx < 5) {
+        const card = board[idx];
+        if (card && card.id === "galaxy_generador_plasma" && card.health > 0) {
+          bonus += 1;
+        }
+      }
+    });
+    return bonus;
+  }
+
 
   let delay = 0;
   const logEl = document.getElementById("combat-status-log");
@@ -387,30 +404,49 @@ function executeCombatCalculationAndNextRound() {
     const c2 = p2.board[i];
 
     if (c1 && c1.pattern !== "defense" && c1.attack > 0) {
-      applyAttack(c1, i, p2, logs, c1.pattern);
+      applyAttack(c1, i, p2, logs, c1.pattern, p1.board);
     }
     if (c2 && c2.pattern !== "defense" && c2.attack > 0) {
-      applyAttack(c2, i, p1, logs, c2.pattern);
+      applyAttack(c2, i, p1, logs, c2.pattern, p2.board);
     }
   }
 
-  // Eliminar destruidas
+  // --- LÓGICA DE NEBULOSA CURATIVA (CURACIÓN ADYACENTE AL FINAL DE LA RONDA) ---
+  applyNebulosaHeals(p1.board, logs, "Tú");
+  applyNebulosaHeals(p2.board, logs, "Rival");
+
+  // Eliminar destruidas e inyectar habilidades al morir (Deathrattles)
   for (let i = 0; i < 5; i++) {
     if (p1.board[i] && p1.board[i].health <= 0) {
-      logs.push(`💥 ${p1.board[i].name} destruida.`);
+      const card = p1.board[i];
+      logs.push(`💥 ${card.name} destruida.`);
+      
+      if (card.id === "galaxy_guerrero_meteoritos") {
+        p2.hp = Math.max(0, p2.hp - 2);
+        logs.push(`☄️ El meteorito residual de [${card.name}] explota en la cara de ${p2.username} e inflige 2 de daño directo.`);
+      }
       p1.board[i] = null;
     }
+    
     if (p2.board[i] && p2.board[i].health <= 0) {
-      logs.push(`💥 ${p2.board[i].name} destruida.`);
+      const card = p2.board[i];
+      logs.push(`💥 ${card.name} destruida.`);
+      
+      if (card.id === "galaxy_guerrero_meteoritos") {
+        p1.hp = Math.max(0, p1.hp - 2);
+        logs.push(`☄️ El meteorito residual de [${card.name}] explota en la cara de ${p1.username} e inflige 2 de daño directo.`);
+      }
       p2.board[i] = null;
     }
   }
+
 
   p1.hp = Math.max(0, p1.hp);
   p2.hp = Math.max(0, p2.hp);
 
   p1.board = serializeBoard(p1.board);
   p2.board = serializeBoard(p2.board);
+
 
   let gameEnded = false;
   let winner = null;
@@ -460,9 +496,25 @@ function executeCombatCalculationAndNextRound() {
 }
 
 
-function applyAttack(card, slotIdx, defender, logs, pattern) {
+function applyAttack(card, slotIdx, defender, logs, pattern, allyBoard) {
   if (!card || card.attack <= 0) return;
-  const dmg = card.attack;
+  
+  // Calcular bono de Generador de Plasma en el backend
+  let bonus = 0;
+  if (allyBoard) {
+    const adj = [slotIdx - 1, slotIdx + 1];
+    adj.forEach(idx => {
+      if (idx >= 0 && idx < 5) {
+        const c = allyBoard[idx];
+        if (c && c.id === "galaxy_generador_plasma" && c.health > 0) {
+          bonus += 1;
+        }
+      }
+    });
+  }
+
+  const dmg = card.attack + bonus;
+  const bonusLogLabel = bonus > 0 ? ` (+${bonus} Plasma)` : "";
   
   defender.board = normalizeBoard(defender.board);
 
@@ -470,10 +522,10 @@ function applyAttack(card, slotIdx, defender, logs, pattern) {
     const target = defender.board[slotIdx];
     if (target) {
       target.health = Math.max(0, target.health - dmg);
-      logs.push(`⚔️ ${card.name} → ${target.name} (-${dmg} ❤️)`);
+      logs.push(`⚔️ ${card.name}${bonusLogLabel} → ${target.name} (-${dmg} ❤️)`);
     } else {
       defender.hp = Math.max(0, defender.hp - dmg);
-      logs.push(`💥 ${card.name} → Vida directa (-${dmg})`);
+      logs.push(`💥 ${card.name}${bonusLogLabel} → Vida directa (-${dmg})`);
     }
   } else if (pattern === "adjacent") {
     // Ataca a los lados (izquierda slotIdx-1 y derecha slotIdx+1)
@@ -485,17 +537,18 @@ function applyAttack(card, slotIdx, defender, logs, pattern) {
         const target = defender.board[sIdx];
         if (target) {
           target.health = Math.max(0, target.health - dmg);
-          logs.push(`↔️ ${card.name} (Lado) → ${target.name} (-${dmg} ❤️)`);
+          logs.push(`↔️ ${card.name}${bonusLogLabel} (Lado) → ${target.name} (-${dmg} ❤️)`);
         } else {
           // Si no hay carta en el lado, va directo al rival
           defender.hp = Math.max(0, defender.hp - dmg);
-          logs.push(`💥 ${card.name} (Lado Vacío) → Vida directa (-${dmg})`);
+          logs.push(`💥 ${card.name}${bonusLogLabel} (Lado Vacío) → Vida directa (-${dmg})`);
         }
       } else {
         // Fuera de los límites del tablero (bordes izquierdo/derecho) también hace daño directo
         defender.hp = Math.max(0, defender.hp - dmg);
-        logs.push(`💥 ${card.name} (Borde) → Vida directa (-${dmg})`);
+        logs.push(`💥 ${card.name}${bonusLogLabel} (Borde) → Vida directa (-${dmg})`);
       }
+
     });
   } else if (pattern === "right") {
     const tIdx = slotIdx + 1 < 5 ? slotIdx + 1 : slotIdx;
@@ -601,12 +654,66 @@ function playCardToSlot(cardInstanceId, slotIndex) {
 
   me.energy -= card.cost;
   me.hand.splice(cardIdx, 1);
+
+  // --- APLICAR HABILIDADES AL ENTRAR EN JUEGO (BATTLECRY) ---
+  const opp = getOppData();
+  const oppBoard = normalizeBoard(opp.board);
+
+  if (card.id === "galaxy_centinela_titan") {
+    me.hp = Math.min(100, me.hp + 3);
+    activeBattle.combatLog = `🛡️ [${card.name}] entra en juego y cura +3 ❤️ a ${me.username}.`;
+  } else if (card.id === "galaxy_explorador_solar") {
+    const hasAdjAlly = (currentBoard[slotIndex - 1] && currentBoard[slotIndex - 1].health > 0) || 
+                       (currentBoard[slotIndex + 1] && currentBoard[slotIndex + 1].health > 0);
+    if (hasAdjAlly) {
+      card.health += 1;
+      activeBattle.combatLog = `🏹 [${card.name}] obtiene +1 ❤️ de vida por aliado adyacente.`;
+    }
+  } else if (card.id === "galaxy_piloto_cazas") {
+    const rightSlot = slotIndex + 1;
+    if (rightSlot < 5) {
+      const target = oppBoard[rightSlot];
+      if (target && target.health > 0) {
+        target.health = Math.max(0, target.health - 1);
+        activeBattle.combatLog = `🛸 [${card.name}] entra e inflige 1 de daño a [${target.name}] a su derecha.`;
+      } else {
+        opp.hp = Math.max(0, opp.hp - 1);
+        activeBattle.combatLog = `🛸 [${card.name}] entra e inflige 1 de daño directo a la vida del rival.`;
+      }
+    }
+  } else if (card.id === "galaxy_infiltrado_vacio") {
+    const oppFacingCard = oppBoard[slotIndex];
+    if (!oppFacingCard || oppFacingCard.health <= 0) {
+      card.attack += 2;
+      activeBattle.combatLog = `🥷 [${card.name}] entra y obtiene +2 ⚔️ de ataque por carril de enfrente vacío.`;
+    }
+  } else if (card.id === "galaxy_emperador_dragon") {
+    let hitCount = 0;
+    for (let s = 0; s < 5; s++) {
+      if (oppBoard[s] && oppBoard[s].health > 0) {
+        oppBoard[s].health = Math.max(0, oppBoard[s].health - 2);
+        hitCount++;
+      }
+    }
+    activeBattle.combatLog = `🐉 ¡[${card.name}] entra e inflige 2 de daño a ${hitCount} guerreros enemigos!`;
+  } else {
+    activeBattle.combatLog = `${me.username} colocó [${card.name}] en el carril ${slotIndex + 1}.`;
+  }
+
   currentBoard[slotIndex] = card;
   // Serializar como objeto con claves string para Firebase
   me.board = serializeBoard(currentBoard);
-  activeBattle.combatLog = `${me.username} colocó [${card.name}] en el carril ${slotIndex + 1}.`;
+  opp.board = serializeBoard(oppBoard);
 
-  pushMyUpdate(me);
+  // Actualizar ambos en Firebase de forma atómica
+  const meField = localRole === "player1" ? "player1" : "player2";
+  const oppField = localRole === "player1" ? "player2" : "player1";
+  
+  db.ref(`battles/${activeBattle.id}`).update({
+    [meField]: me,
+    [oppField]: opp,
+    combatLog: activeBattle.combatLog
+  });
 }
 
 
@@ -765,7 +872,9 @@ function renderHand(hand, energy) {
       el.style.cursor = "not-allowed";
     }
 
+    applyPremiumCardStyles(el, card);
     el.innerHTML = buildCardHTML(card, energy);
+
 
     el.addEventListener("click", () => {
       if (!canPlay) { alert(`Sin monedas. Necesitas 🪙${card.cost}, tienes 🪙${energy}`); return; }
@@ -808,8 +917,10 @@ function renderBoardSlots(boardId, slots, isMyBoard, revealed) {
         const el = document.createElement("div");
         el.className = `game-card rarity-${card.rarity}`;
         if (revealed && !isMyBoard) el.classList.add("card-reveal-anim");
+        applyPremiumCardStyles(el, card);
         el.innerHTML = buildCardHTML(card);
         slot.appendChild(el);
+
       }
     } else {
       const emptyEl = document.createElement("div");
@@ -821,6 +932,21 @@ function renderBoardSlots(boardId, slots, isMyBoard, revealed) {
 }
 
 function buildCardHTML(card) {
+  if (card.image) {
+    // Si la carta tiene imagen, superponemos los números sobre los casilleros de tu diseño
+    const displayAttack = card.isSupport ? "" : card.attack;
+    const displayHealth = card.health;
+    const displayCost = card.cost;
+
+    return `
+      <div class="premium-cost">${displayCost}</div>
+      ${card.isSupport ? "" : `<div class="premium-attack">${displayAttack}</div>`}
+      <div class="premium-health">${displayHealth}</div>
+      <div class="card-desc-tooltip">${card.description || "Carta oficial."}</div>
+    `;
+  }
+
+  // De lo contrario, usamos el diseño estándar cyberpunk por defecto
   const patternMap = { front: "⬆️ FRENTE", adjacent: "↔️ LADOS", right: "➡️ DERECHA", defense: "🛡️ DEFENSA" };
   const rarityMap = { common: "Común", rare: "Rara", epic: "Épica", legendary: "Legendaria" };
 
@@ -839,6 +965,17 @@ function buildCardHTML(card) {
     </div>
   `;
 }
+
+function applyPremiumCardStyles(el, card) {
+  if (card.image) {
+    el.classList.add("premium-design");
+    el.style.backgroundImage = `url('${card.image}')`;
+  } else {
+    el.classList.remove("premium-design");
+    el.style.backgroundImage = "none";
+  }
+}
+
 
 // ==========================================================================
 // DRAG & DROP Y CONTROLES
@@ -932,3 +1069,25 @@ function shuffle(arr) {
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
 }
+
+function applyNebulosaHeals(board, logs, sideLabel) {
+  const originalBoard = JSON.parse(JSON.stringify(board));
+  for (let i = 0; i < 5; i++) {
+    const card = originalBoard[i];
+    if (card && card.id === "galaxy_nebulosa_curativa" && card.health > 0) {
+      // Curar adyacentes a esta Nebulosa Curativa
+      const adj = [i - 1, i + 1];
+      adj.forEach(idx => {
+        if (idx >= 0 && idx < 5) {
+          const target = board[idx];
+          if (target && target.health > 0) {
+            // Suponer que curamos un valor de +2 de vida
+            target.health += 2;
+            logs.push(`💖 Nebulosa Curativa (${sideLabel}) cura +2 ❤️ a ${target.name}`);
+          }
+        }
+      });
+    }
+  }
+}
+

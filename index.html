@@ -222,9 +222,30 @@
               </div>
             </div>
 
+            <div class="input-row">
+              <div class="input-group">
+                <label for="card-create-class">Clase de la Carta (Ej: caballero, guerrero)</label>
+                <input type="text" id="card-create-class" maxlength="20" placeholder="Ej: caballero" value="guerrero" required>
+              </div>
+              <div class="input-group" style="flex-direction:row; gap:10px; align-items:center; margin-top:20px;">
+                <input type="checkbox" id="card-create-support" style="width:20px; height:20px;">
+                <label for="card-create-support" style="margin-bottom:0; cursor:pointer;">¿Es Carta de Apoyo?</label>
+              </div>
+            </div>
+
+            <div class="input-group" style="flex-direction:row; gap:10px; align-items:center;">
+              <input type="checkbox" id="card-create-has-ability" style="width:20px; height:20px;">
+              <label for="card-create-has-ability" style="margin-bottom:0; cursor:pointer;">¿Tiene Habilidad Especial?</label>
+            </div>
+
+            <div id="ability-detail-group" class="input-group hidden">
+              <label for="card-create-ability">Detalle de la Habilidad Especial</label>
+              <textarea id="card-create-ability" maxlength="150" placeholder="Ej: La probabilidad de evitar ataques enemigos aumenta un 10%..." style="background:#151821; border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:10px; color:#fff; min-height:60px; resize:vertical;"></textarea>
+            </div>
+
             <div class="input-group">
-              <label for="card-create-desc">Habilidad o Descripción corta</label>
-              <input type="text" id="card-create-desc" maxlength="60" placeholder="Ej: Ataca con furia protectora.">
+              <label for="card-create-desc">Descripción Ambientativa (Lore)</label>
+              <input type="text" id="card-create-desc" maxlength="80" placeholder="Ej: Una criatura muy refinada..." required>
             </div>
 
             <button type="submit" class="btn btn-accent btn-block">Guardar y Añadir a la Colección</button>
