@@ -1,0 +1,20 @@
+{
+  "name": "Ultimate Crossover",
+  "short_name": "UC Battle",
+  "description": "Juego de cartas coleccionables de combate por turnos online",
+  "start_url": "/ultimate-crossover/",
+  "scope": "/ultimate-crossover/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0a1a",
+  "theme_color": "#1a0030",
+  "icons": [
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["games", "entertainment"]
+}
