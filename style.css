@@ -1631,6 +1631,384 @@ body {
   height: 230px;
 }
 
+/* ==========================================================================
+   RESPONSIVE: MOBILE LANDSCAPE (celular en horizontal)
+   Aplica cuando la altura del viewport es menor a 500px (celular girado)
+   ========================================================================== */
+@media screen and (max-height: 500px) and (orientation: landscape) {
+
+  /* --- GENERAL --- */
+  body {
+    font-size: 12px;
+    overflow-x: hidden;
+  }
+
+  .screen {
+    padding: 0;
+  }
+
+  .glass-card {
+    padding: 10px !important;
+    border-radius: 10px !important;
+  }
+
+  h1, .screen-title {
+    font-size: 1.2rem !important;
+    margin: 5px 0 !important;
+  }
+
+  h2 { font-size: 1rem !important; }
+  h3 { font-size: 0.85rem !important; }
+
+  .btn {
+    padding: 6px 12px !important;
+    font-size: 0.75rem !important;
+  }
+
+  /* --- LOGIN / AUTH --- */
+  #screen-auth {
+    padding: 10px !important;
+  }
+
+  .auth-card {
+    max-width: 400px;
+    padding: 15px !important;
+  }
+
+  .logo-text {
+    font-size: 1.5rem !important;
+    margin-bottom: 5px !important;
+  }
+
+  .auth-card input {
+    padding: 8px !important;
+    font-size: 0.8rem !important;
+  }
+
+  /* --- LOBBY --- */
+  .lobby-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+    padding: 5px 10px !important;
+  }
+
+  .menu-column {
+    gap: 5px !important;
+  }
+
+  .menu-card {
+    padding: 8px 12px !important;
+    min-height: auto !important;
+  }
+
+  .menu-card.play-card {
+    padding: 10px 15px !important;
+  }
+
+  .menu-card.play-card h2 {
+    font-size: 1rem !important;
+  }
+
+  .menu-card h3 {
+    font-size: 0.8rem !important;
+    margin-bottom: 2px !important;
+  }
+
+  .menu-card p {
+    font-size: 0.65rem !important;
+    display: none; /* Ocultar subtextos en móvil */
+  }
+
+  .submenu-cards {
+    gap: 5px !important;
+  }
+
+  /* Recompensa diaria compacta */
+  .daily-reward-panel {
+    padding: 8px !important;
+    margin-bottom: 5px !important;
+  }
+
+  .daily-reward-panel h2 {
+    font-size: 0.9rem !important;
+  }
+
+  .daily-reward-panel p {
+    font-size: 0.65rem !important;
+    margin-bottom: 5px !important;
+  }
+
+  .day-card {
+    padding: 4px 6px !important;
+    font-size: 0.65rem !important;
+  }
+
+  .day-card .karm-amount {
+    font-size: 0.75rem !important;
+  }
+
+  .social-column {
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  /* Header del lobby */
+  .lobby-header {
+    padding: 5px 10px !important;
+    gap: 8px !important;
+  }
+
+  .lobby-header .user-info h2 {
+    font-size: 0.85rem !important;
+  }
+
+  /* --- CARTAS: TAMAÑO MÓVIL --- */
+  .game-card {
+    width: 80px !important;
+    height: 115px !important;
+    border-radius: 8px !important;
+    padding: 4px !important;
+  }
+
+  .game-card .card-name {
+    font-size: 0.5rem !important;
+  }
+
+  .game-card .card-rarity-badge {
+    font-size: 0.45rem !important;
+    padding: 1px 4px !important;
+  }
+
+  /* Stats premium en cartas móvil */
+  .game-card.premium-design .premium-cost,
+  .game-card.premium-design .premium-attack,
+  .game-card.premium-design .premium-health {
+    font-size: 0.55rem !important;
+    width: 18px !important;
+    height: 18px !important;
+    padding: 1px !important;
+  }
+
+  .game-card.premium-design .stat-overlay {
+    font-size: 0.55rem !important;
+  }
+
+  .game-card.premium-design .card-name-overlay {
+    font-size: 0.4rem !important;
+  }
+
+  .game-card.premium-design .card-desc-overlay {
+    font-size: 0.35rem !important;
+    display: none !important;
+  }
+
+  /* --- BATALLA --- */
+  #screen-battle {
+    padding: 0 !important;
+  }
+
+  .battle-header {
+    padding: 4px 10px !important;
+    gap: 5px !important;
+  }
+
+  .battle-header h2 {
+    font-size: 0.8rem !important;
+  }
+
+  .battle-arena {
+    padding: 6px !important;
+    border-radius: 10px !important;
+    margin: 0 5px !important;
+  }
+
+  .enemy-area, .player-area {
+    gap: 4px !important;
+  }
+
+  .player-info-bar {
+    padding: 4px 8px !important;
+    gap: 5px !important;
+  }
+
+  .battle-player-name {
+    font-size: 0.7rem !important;
+  }
+
+  .energy-label, .health-label {
+    font-size: 0.6rem !important;
+  }
+
+  .energy-value, .health-value {
+    font-size: 0.7rem !important;
+  }
+
+  .health-bar-bg {
+    height: 8px !important;
+  }
+
+  /* Tablero de batalla: carriles compactos */
+  .board-slots {
+    gap: 6px !important;
+    padding: 4px 0 !important;
+  }
+
+  .board-slot {
+    border-radius: 6px !important;
+  }
+
+  /* Divisor central */
+  .battle-divider {
+    padding: 3px 0 !important;
+  }
+
+  .combat-log-display {
+    font-size: 0.6rem !important;
+    padding: 4px 8px !important;
+    max-height: 25px !important;
+    overflow: hidden;
+  }
+
+  /* Panel de control inferior */
+  .battle-control-panel {
+    padding: 5px 10px !important;
+  }
+
+  .battle-control-panel p {
+    font-size: 0.65rem !important;
+    margin: 2px 0 !important;
+  }
+
+  /* Mano del jugador: scroll horizontal */
+  .player-hand-container {
+    padding: 3px 0 !important;
+  }
+
+  .player-hand-container h4 {
+    font-size: 0.7rem !important;
+    margin-bottom: 3px !important;
+  }
+
+  .hand-row {
+    gap: 6px !important;
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .hand-row .game-card {
+    flex-shrink: 0;
+  }
+
+  /* Acciones de turno */
+  .turn-actions {
+    margin-top: 3px !important;
+  }
+
+  .turn-actions .btn {
+    padding: 6px 10px !important;
+    font-size: 0.7rem !important;
+  }
+
+  #draw-phase-controls .btn {
+    padding: 5px 10px !important;
+    font-size: 0.7rem !important;
+  }
+
+  /* --- TIENDA --- */
+  .shop-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  /* --- ÁLBUM / CARDEX --- */
+  #screen-album {
+    padding-top: 5px !important;
+  }
+
+  #album-book-grid {
+    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  #album-book-grid .game-card {
+    width: 90px !important;
+    height: 130px !important;
+  }
+
+  .filter-album-btn {
+    padding: 4px 8px !important;
+    font-size: 0.65rem !important;
+  }
+
+  /* --- DECK BUILDER --- */
+  .deck-builder-grid {
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)) !important;
+    gap: 6px !important;
+  }
+
+  /* --- VISOR DE CARTA (overlay) --- */
+  #card-viewer-overlay > div {
+    flex-direction: row !important;
+    align-items: flex-start !important;
+    padding: 15px !important;
+    gap: 15px !important;
+    max-width: 100% !important;
+    overflow-y: auto;
+  }
+
+  #viewer-card-container {
+    width: 160px !important;
+    height: 230px !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* --- OVERLAYS --- */
+  .overlay .opening-animation-container {
+    padding: 10px !important;
+    gap: 10px !important;
+  }
+
+  /* Cartas reveladas en sobres */
+  .revealed-cards-grid {
+    gap: 8px !important;
+  }
+
+  /* Matchmaking overlay */
+  .scanner-circle {
+    width: 50px !important;
+    height: 50px !important;
+  }
+
+  /* --- MODOS DE JUEGO --- */
+  .game-modes-container {
+    padding: 5px 10px !important;
+  }
+}
+
+/* También aplicar en pantallas pequeñas en general (portrait phone) */
+@media screen and (max-width: 600px) {
+  .game-card {
+    width: 100px !important;
+    height: 143px !important;
+  }
+
+  .lobby-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .board-slots {
+    gap: 6px !important;
+  }
+
+  #album-book-grid .game-card {
+    width: 100px !important;
+    height: 143px !important;
+  }
+}
+
+
 
 
 

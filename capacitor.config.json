@@ -12,5 +12,8 @@
       "showSpinner": false,
       "androidScaleType": "CENTER_CROP"
     }
+  },
+  "android": {
+    "orientation": "landscape"
   }
 }
