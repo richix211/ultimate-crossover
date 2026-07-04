@@ -3,7 +3,8 @@
   "appName": "Ultimate Crossover",
   "webDir": "www",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "cleartext": true
   },
   "plugins": {
     "SplashScreen": {
@@ -12,8 +13,5 @@
       "showSpinner": false,
       "androidScaleType": "CENTER_CROP"
     }
-  },
-  "android": {
-    "orientation": "landscape"
   }
 }
